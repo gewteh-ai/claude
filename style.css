@@ -118,7 +118,22 @@ canvas#game {
   line-height: 1;
 }
 .go-score-label { font-size: 13px; letter-spacing: 4px; opacity: 0.6; }
+.go-critter {
+  font-weight: 800;
+  letter-spacing: 3px;
+  font-size: 19px;
+  color: #ffd27a;
+  text-shadow: 0 0 14px rgba(255,180,80,0.65);
+}
 .go-best { font-size: 15px; opacity: 0.75; letter-spacing: 1px; }
+
+.evo {
+  margin-top: 6px;
+  font-size: 15px;
+  letter-spacing: 2px;
+  opacity: 0.85;
+}
+.evo small { display: block; font-size: 11px; letter-spacing: 2px; opacity: 0.55; margin-top: 3px; }
 
 .new-best {
   font-weight: 800;
