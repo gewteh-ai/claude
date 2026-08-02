@@ -66,17 +66,19 @@
   const SPEED_MAX = 470;
   const SPAWN_BASE = 1.55;     // seconds between obstacles
   // ---- Excitement Pack tuning ----
-  const NEARMISS = 18;                 // px closeness that counts as a "close call"
-  const SHIELD_MAX   = [0, 1, 2, 2];   // shield charges by tier
-  const SHIELD_REGEN = [99, 11, 8, 6]; // seconds to regen a charge by tier
-  const BOOST_NEED = 100;              // meter fill required for a boost
-  const BOOST_TIME = 2.3;              // seconds a boost lasts
-  // Evolution tiers — unlock as your score climbs (drawX are hoisted fns)
+  const NEARMISS = 18;                        // px closeness that counts as a "close call"
+  const SHIELD_MAX   = [0, 1, 2, 2, 3];       // shield charges by tier
+  const SHIELD_REGEN = [99, 12, 9, 7, 5];     // seconds to regen a charge by tier
+  const JET_NEED = 100;                       // meter fill required for a JET
+  const JET_TIME = 4.5;                        // seconds the JET lasts
+  const JET_MAGNET = 300;                     // px pearl-magnet radius during JET
+  // Evolution tiers — a longer journey (drawX are hoisted fns)
   const TIERS = [
-    { name: "PRAWN",   emoji: "🦐", at: 0,  draw: drawPrawn,   glow: "#ff9a4d" },
-    { name: "LOBSTER", emoji: "🦞", at: 10, draw: drawLobster, glow: "#ff4d4d" },
-    { name: "CRAB",    emoji: "🦀", at: 25, draw: drawCrab,    glow: "#ff5ea8" },
-    { name: "KRAKEN",  emoji: "🐙", at: 45, draw: drawKraken,  glow: "#b06bff" },
+    { name: "PRAWN",     emoji: "🦐", at: 0,   draw: drawPrawn,   glow: "#ff9a4d" },
+    { name: "LOBSTER",   emoji: "🦞", at: 20,  draw: drawLobster, glow: "#ff4d4d" },
+    { name: "CRAB",      emoji: "🦀", at: 50,  draw: drawCrab,    glow: "#ff5ea8" },
+    { name: "KRAKEN",    emoji: "🐙", at: 95,  draw: drawKraken,  glow: "#b06bff" },
+    { name: "LEVIATHAN", emoji: "🐋", at: 160, draw: drawWhale,   glow: "#4db8ff" },
   ];
   function levelForScore(s) { let l = 0; for (let i = 0; i < TIERS.length; i++) if (s >= TIERS[i].at) l = i; return l; }
 
@@ -301,14 +303,15 @@
   }
 
   function doBoost() {
-    if (state !== STATE.PLAY || boost < BOOST_NEED || boosting > 0) return;
+    if (state !== STATE.PLAY || boost < JET_NEED || boosting > 0) return;
     boost = 0;
-    boosting = BOOST_TIME;
-    invuln = BOOST_TIME + 0.3;
-    flash = Math.max(flash, 0.5);
+    boosting = JET_TIME;
+    invuln = JET_TIME + 0.4;
+    flash = Math.max(flash, 0.55);
     shake = Math.max(shake, 10);
-    addFloat(player.x, player.y - 34, "BOOST!", "#ffe259");
-    beep(200, 0.28, "sawtooth", 0.07);
+    addFloat(player.x, player.y - 34, "🚀 JET!", "#ffe259");
+    beep(180, 0.3, "sawtooth", 0.07);
+    setTimeout(() => beep(300, 0.2, "sawtooth", 0.05), 120);
   }
 
   function updateHUD() {
@@ -319,8 +322,8 @@
     } else {
       el.hudCombo.classList.add("hidden");
     }
-    el.boostFill.style.width = Math.min(100, (boost / BOOST_NEED) * 100) + "%";
-    el.btnBoost.classList.toggle("hidden", boost < BOOST_NEED || boosting > 0);
+    el.boostFill.style.width = Math.min(100, (boost / JET_NEED) * 100) + "%";
+    el.btnBoost.classList.toggle("hidden", boost < JET_NEED || boosting > 0);
   }
 
   let bannerTimer = null;
@@ -377,19 +380,28 @@
 
     if (state === STATE.PLAY) {
       // player physics
-      player.vy += GRAVITY * gdt;
-      player.y += player.vy * gdt;
-      player.rot = Math.max(-0.5, Math.min(1.1, player.vy / 700));
+      if (boosting > 0) {
+        // JET mode: gravity off, damped steering, stays on screen, exhaust trail
+        player.vy *= 0.9;
+        player.y += player.vy * gdt;
+        player.y = Math.min(Math.max(player.y, 60), H - 60);
+        player.rot = -0.22;
+        if (Math.random() < 0.7) burst(player.x - 20, player.y + 3, "#ffd24d", 2, 70);
+      } else {
+        player.vy += GRAVITY * gdt;
+        player.y += player.vy * gdt;
+        player.rot = Math.max(-0.5, Math.min(1.1, player.vy / 700));
+      }
 
       // trail
       player.trail.unshift({ x: player.x, y: player.y });
       if (player.trail.length > 14) player.trail.pop();
 
-      // spawns
+      // spawns (pearls come thick and fast during a JET so you sweep them up)
       spawnTimer -= gdt;
       if (spawnTimer <= 0) { spawnObstacle(); spawnTimer = spawnInterval; }
       pearlTimer -= gdt;
-      if (pearlTimer <= 0) { spawnPearl(); pearlTimer = 0.9 + Math.random() * 0.9; }
+      if (pearlTimer <= 0) { spawnPearl(); pearlTimer = boosting > 0 ? 0.32 : 0.9 + Math.random() * 0.9; }
       if (elapsed > 6) {
         enemyTimer -= gdt;
         if (enemyTimer <= 0) { spawnEnemy(); enemyTimer = 2.6 + Math.random() * 2.6; }
@@ -429,13 +441,19 @@
       // pearls
       for (const pr of pearls) {
         pr.x -= speed * gdt; pr.ph += realDt * 4;
+        // JET magnet: pull nearby pearls toward the prawn
+        if (boosting > 0 && !pr.got) {
+          const mdx = player.x - pr.x, mdy = player.y - pr.y;
+          const md = Math.hypot(mdx, mdy) || 1;
+          if (md < JET_MAGNET) { pr.x += (mdx / md) * 640 * gdt; pr.y += (mdy / md) * 640 * gdt; }
+        }
         const py = pr.y + Math.sin(pr.ph) * 4;
         const dx = pr.x - player.x, dy = py - player.y;
         if (!pr.got && dx * dx + dy * dy < (PLAYER_R + pr.r + 4) * (PLAYER_R + pr.r + 4)) {
           pr.got = true;
           combo++; bumpMultiplier();
           addScore(1 * multiplier, pr.x, py - 12, "+" + (1 * multiplier), "#7fe8ff");
-          boost = Math.min(BOOST_NEED, boost + 12);
+          boost = Math.min(JET_NEED, boost + 12);
           burst(pr.x, py, "#7fe8ff", 10, 130);
           beep(1000 + combo * 8, 0.06, "sine", 0.05);
         }
@@ -526,13 +544,17 @@
     }
     ctx.globalAlpha = 1;
 
-    // boost aura (behind player)
+    // JET flame + magnet ring
     if (boosting > 0 && state === STATE.PLAY) {
       ctx.save();
-      ctx.globalAlpha = 0.5;
-      for (let i = 1; i <= 4; i++) {
-        ctx.fillStyle = "rgba(255,226,89," + (0.18 / i) + ")";
-        ctx.beginPath(); ctx.ellipse(player.x - i * 22, player.y, 26, 12, 0, 0, 7); ctx.fill();
+      // magnet radius hint
+      ctx.strokeStyle = "rgba(127,232,255,0.22)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(player.x, player.y, JET_MAGNET * 0.5, 0, 7); ctx.stroke();
+      // flame cone streaking behind
+      for (let i = 1; i <= 6; i++) {
+        ctx.globalAlpha = 0.55 / i;
+        ctx.fillStyle = i % 2 ? "rgba(255,170,40,1)" : "rgba(255,240,120,1)";
+        ctx.beginPath(); ctx.ellipse(player.x - 16 - i * 15, player.y, 20 + i * 4, 9, 0, 0, 7); ctx.fill();
       }
       ctx.restore();
     }
@@ -833,6 +855,41 @@
     ctx.strokeStyle = "#5a1fb0"; ctx.lineWidth = 3.5;
     ctx.beginPath(); ctx.moveTo(r * 0.42, -r * 0.62); ctx.lineTo(r * 0.92, -r * 0.38); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(r * 0.42, r * 0.62); ctx.lineTo(r * 0.92, r * 0.38); ctx.stroke();
+  }
+
+  function drawWhale(rBase) {
+    const r = rBase * 1.4;
+    const grd = ctx.createLinearGradient(0, -r, 0, r);
+    grd.addColorStop(0, "#8fd6ff");
+    grd.addColorStop(1, "#1f6dc0");
+    ctx.shadowColor = "#4db8ff"; ctx.shadowBlur = 30;
+    ctx.fillStyle = grd;
+    // body
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 1.2, r * 0.68, 0, 0, 7); ctx.fill();
+    // tail fluke (left)
+    ctx.beginPath();
+    ctx.moveTo(-r * 1.05, 0);
+    ctx.quadraticCurveTo(-r * 1.7, -r * 0.5, -r * 1.95, -r * 0.72);
+    ctx.quadraticCurveTo(-r * 1.5, -r * 0.2, -r * 1.55, 0);
+    ctx.quadraticCurveTo(-r * 1.5, r * 0.2, -r * 1.95, r * 0.72);
+    ctx.quadraticCurveTo(-r * 1.7, r * 0.5, -r * 1.05, 0);
+    ctx.closePath(); ctx.fill();
+    // pectoral fin
+    ctx.beginPath(); ctx.ellipse(r * 0.15, r * 0.5, r * 0.36, r * 0.18, 0.6, 0, 7); ctx.fill();
+    ctx.shadowBlur = 0;
+    // lighter belly
+    ctx.fillStyle = "rgba(224,246,255,0.45)";
+    ctx.beginPath(); ctx.ellipse(r * 0.25, r * 0.3, r * 0.85, r * 0.28, 0, 0, 7); ctx.fill();
+    // mouth
+    ctx.strokeStyle = "#12456e"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(r * 1.12, r * 0.08); ctx.quadraticCurveTo(r * 0.7, r * 0.36, r * 0.3, r * 0.3); ctx.stroke();
+    // spout
+    ctx.strokeStyle = "rgba(190,235,255,0.75)"; ctx.lineWidth = 2;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath(); ctx.moveTo(r * 0.4, -r * 0.62); ctx.quadraticCurveTo(r * 0.4 + i * 8, -r * 1.0, r * 0.4 + i * 15, -r * 1.25); ctx.stroke();
+    }
+    // eye
+    drawEye(r * 0.82, -r * 0.16, r * 0.16);
   }
 
   // shared: a big clear googly eye

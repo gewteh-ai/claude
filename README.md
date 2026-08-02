@@ -9,12 +9,12 @@ Tap / click / press **Space** to swim a **prawn** through a glowing coral reef. 
 ## ✨ Features
 
 - **Addictive core loop** — instant tap-to-retry, escalating speed & shrinking gaps, near-miss tension
-- **4-tier evolution** — 🦐 Prawn → 🦞 Lobster (10) → 🦀 Crab (25) → 🐙 Kraken (45), each with a celebration burst + rising chime + big banner, and shown on the game-over screen
+- **5-tier evolution** — 🦐 Prawn → 🦞 Lobster (20) → 🦀 Crab (50) → 🐙 Kraken (95) → 🐋 Leviathan (160), each with a celebration burst + rising chime + big banner, and shown on the game-over screen
 - **Excitement Pack** —
   - 🫧 **Pearls & combos**: grab pearl clusters to build a combo multiplier (up to x5) and rack up points
   - ⏱️ **Near-miss slow-mo**: squeak through a tight gap for a slow-motion "CLOSE!" bonus
   - 🛡️ **Shield ability**: higher tiers gain regenerating shield charges that absorb a hit (armor scales with evolution)
-  - ⚡ **Boost**: pearls fill a boost meter — unleash an invincible dash that smashes through coral and jellyfish for bonus points
+  - 🚀 **JET power-up** (Subway-Surfers style): pearls fill a meter — launch a 4.5s invincible jet that flies you forward, **magnetizes and vacuums up pearls**, and smashes through coral and jellyfish
   - 🪼 **Jellyfish hazard**: drifting enemies you must dodge (or smash during a boost)
   - Screen flash + floating score popups for extra juice
 - **Underwater theme** — ocean gradient, rising bubbles, glowing coral/kelp obstacles, hand-drawn prawn & lobster
