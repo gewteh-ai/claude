@@ -1,15 +1,17 @@
-# ⚡ Neon Dash
+# 🦐 Prawn Dash
 
 A polished, **addictive one-tap arcade game** built with pure HTML/CSS/JS — **no dependencies, no build step, runs offline**.
 
-Tap / click / press **Space** to fly a glowing orb through neon gates. Miss and you restart instantly — the classic "one more try" loop that makes these games so sticky.
+Tap / click / press **Space** to swim a **prawn** through a glowing coral reef. Survive to a score of **10** and your prawn **levels up into a lobster** 🦞 (bigger, with claws). Miss a gap and you restart instantly — the classic "one more try" loop that makes these games so sticky.
 
 ![theme: neon](https://img.shields.io/badge/theme-neon-22e0ff) ![deps: none](https://img.shields.io/badge/dependencies-none-9b5cff) ![offline: yes](https://img.shields.io/badge/offline-ready-ff2fb9)
 
 ## ✨ Features
 
 - **Addictive core loop** — instant tap-to-retry, escalating speed & shrinking gaps, near-miss tension
-- **Polished visuals** — neon glow, particle bursts, parallax twinkling starfield, orb trail, screen shake
+- **Prawn → Lobster level-up** — reach score 10 and your critter evolves (with a celebration burst + sound)
+- **Underwater theme** — ocean gradient, rising bubbles, glowing coral/kelp obstacles, hand-drawn prawn & lobster
+- **Polished visuals** — glow, particle bursts, light specks, bubble trail, screen shake
 - **Sound with zero asset files** — tiny built-in WebAudio synth for flaps/scores/crashes
 - **Virality** — Share Score button (native share sheet + clipboard fallback with emoji result)
 - **Retention** — high score & play streak saved in `localStorage`

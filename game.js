@@ -59,25 +59,29 @@
   const SPEED_BASE = 240;      // px/s horizontal
   const SPEED_MAX = 470;
   const SPAWN_BASE = 1.55;     // seconds between obstacles
+  const LEVELUP_SCORE = 10;    // prawn -> lobster
 
   // ---------- Game state ----------
   const STATE = { MENU: 0, PLAY: 1, DEAD: 2 };
   let state = STATE.MENU;
 
-  let player, obstacles, particles, stars, farStars;
-  let score, speed, spawnTimer, elapsed, shake, usedRevive;
+  let player, obstacles, particles, stars, farStars, bubbles;
+  let score, speed, spawnTimer, elapsed, shake, usedRevive, curLevel, bubbleTimer;
   let lastTime = 0;
 
   function reset() {
     player = { x: W * 0.28, y: H * 0.45, vy: 0, rot: 0, trail: [] };
     obstacles = [];
     particles = [];
+    bubbles = bubbles || [];
     score = 0;
     speed = SPEED_BASE;
     spawnTimer = 0.4;
     elapsed = 0;
     shake = 0;
     usedRevive = false;
+    curLevel = 0;
+    bubbleTimer = 0;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -134,8 +138,8 @@
     if (state === STATE.MENU) { startGame(); return; }
     if (state === STATE.PLAY) {
       player.vy = FLAP_V;
-      burst(player.x - 6, player.y + 8, "#22e0ff", 5, 60);
-      beep(560, 0.09, "triangle", 0.05);
+      burst(player.x - 8, player.y + 6, "#9fe8ff", 6, 70); // splash bubbles
+      beep(300, 0.1, "sine", 0.05); // bubble bloop
     }
   }
 
@@ -215,9 +219,18 @@
     speed = Math.min(SPEED_MAX, SPEED_BASE + elapsed * 8);
     const spawnInterval = Math.max(0.95, SPAWN_BASE - elapsed * 0.012);
 
-    // parallax stars
+    // parallax light specks
     for (const s of farStars) { s.x -= speed * 0.15 * dt; if (s.x < 0) s.x += W; }
     for (const s of stars) { s.x -= speed * 0.4 * dt; s.tw += dt * 3; if (s.x < 0) s.x += W; }
+
+    // rising bubbles (underwater ambience)
+    bubbleTimer -= dt;
+    if (bubbleTimer <= 0) {
+      bubbles.push({ x: Math.random() * W, y: H + 12, r: Math.random() * 6 + 2, vy: Math.random() * 45 + 28, wob: Math.random() * 22 + 8, ph: Math.random() * 6 });
+      bubbleTimer = 0.16;
+    }
+    for (const b of bubbles) { b.y -= b.vy * dt; b.ph += dt * 2; b.x += Math.sin(b.ph) * b.wob * dt; }
+    bubbles = bubbles.filter(b => b.y > -20);
 
     if (state === STATE.PLAY) {
       // player physics
@@ -239,8 +252,10 @@
         if (!o.passed && o.x + o.w < player.x) {
           o.passed = true;
           score++;
-          burst(player.x + 20, player.y, "#9b5cff", 8, 120);
-          beep(720 + score * 6, 0.08, "square", 0.045);
+          burst(player.x + 20, player.y, "#ffd27a", 8, 120);
+          beep(600 + score * 6, 0.07, "triangle", 0.04);
+          const newLevel = score >= LEVELUP_SCORE ? 1 : 0;
+          if (newLevel !== curLevel) { curLevel = newLevel; onLevelUp(); }
         }
         // collision
         if (hits(player, o)) die();
@@ -280,11 +295,22 @@
     // far stars
     ctx.fillStyle = "rgba(180,200,255,0.35)";
     for (const s of farStars) { ctx.fillRect(s.x, s.y, s.r, s.r); }
-    // near stars (twinkle)
+    // near specks (twinkle like sunlight through water)
     for (const s of stars) {
-      const a = 0.5 + Math.sin(s.tw) * 0.4;
-      ctx.fillStyle = `rgba(200,230,255,${a})`;
+      const a = 0.4 + Math.sin(s.tw) * 0.35;
+      ctx.fillStyle = `rgba(150,225,255,${a})`;
       ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill();
+    }
+
+    // rising bubbles
+    ctx.lineWidth = 1;
+    for (const b of bubbles) {
+      ctx.fillStyle = "rgba(140,225,255,0.08)";
+      ctx.strokeStyle = "rgba(150,230,255,0.28)";
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill(); ctx.stroke();
+      // little highlight
+      ctx.fillStyle = "rgba(220,250,255,0.5)";
+      ctx.beginPath(); ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.25, 0, 7); ctx.fill();
     }
 
     // obstacles
@@ -307,49 +333,165 @@
   }
 
   function drawObstacle(o) {
-    const col = `hsl(${o.hue}, 100%, 62%)`;
+    // glowing coral / kelp (greens with a little variation)
+    const col = `hsl(${150 + (o.hue % 50) - 25}, 78%, 56%)`;
     ctx.save();
     ctx.shadowColor = col;
-    ctx.shadowBlur = 22;
-    ctx.fillStyle = "rgba(10,10,35,0.9)";
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = "rgba(4,30,34,0.92)";
     ctx.strokeStyle = col;
     ctx.lineWidth = 3;
     // top pillar
-    roundRect(o.x, -10, o.w, o.gapY + 10, 8);
+    roundRect(o.x, -10, o.w, o.gapY + 10, 10);
     ctx.fill(); ctx.stroke();
     // bottom pillar
-    roundRect(o.x, o.gapY + o.gap, o.w, H - (o.gapY + o.gap) + 10, 8);
+    roundRect(o.x, o.gapY + o.gap, o.w, H - (o.gapY + o.gap) + 10, 10);
     ctx.fill(); ctx.stroke();
+    // coral bumps along the inner edges for texture
+    ctx.fillStyle = col;
+    ctx.globalAlpha = 0.55;
+    for (let i = 0; i < 3; i++) {
+      const bx = o.x + 12 + i * 20;
+      ctx.beginPath(); ctx.arc(bx, o.gapY - 2, 5, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(bx, o.gapY + o.gap + 2, 5, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
   function drawPlayer() {
-    // trail
+    // bubble trail
     for (let i = 0; i < player.trail.length; i++) {
       const t = player.trail[i];
-      const a = (1 - i / player.trail.length) * 0.5;
+      const a = (1 - i / player.trail.length) * 0.35;
       ctx.globalAlpha = a;
-      ctx.fillStyle = "#22e0ff";
-      ctx.beginPath(); ctx.arc(t.x, t.y, PLAYER_R * (1 - i / player.trail.length), 0, 7); ctx.fill();
+      ctx.fillStyle = "#bff0ff";
+      ctx.beginPath(); ctx.arc(t.x - 6, t.y, PLAYER_R * 0.4 * (1 - i / player.trail.length), 0, 7); ctx.fill();
     }
     ctx.globalAlpha = 1;
 
-    // body
     ctx.save();
     ctx.translate(player.x, player.y);
     ctx.rotate(player.rot);
-    ctx.shadowColor = "#22e0ff";
-    ctx.shadowBlur = 28;
-    const grd = ctx.createLinearGradient(-PLAYER_R, -PLAYER_R, PLAYER_R, PLAYER_R);
-    grd.addColorStop(0, "#8ff6ff");
-    grd.addColorStop(1, "#2f9bff");
-    ctx.fillStyle = grd;
-    ctx.beginPath(); ctx.arc(0, 0, PLAYER_R, 0, 7); ctx.fill();
-    // eye glint
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = "#05040f";
-    ctx.beginPath(); ctx.arc(6, -3, 3.5, 0, 7); ctx.fill();
+    if (curLevel >= 1) drawLobster(PLAYER_R);
+    else drawPrawn(PLAYER_R);
     ctx.restore();
+  }
+
+  // ---------- Creatures (facing right, centered at origin) ----------
+  function bodySegments(segs) {
+    ctx.beginPath();
+    for (const s of segs) { ctx.moveTo(s.x + s.s, s.y); ctx.arc(s.x, s.y, s.s, 0, 7); }
+    ctx.fill();
+  }
+
+  function drawPrawn(r) {
+    const grd = ctx.createLinearGradient(-r, -r, r, r);
+    grd.addColorStop(0, "#ffd0bc");
+    grd.addColorStop(1, "#ff6a3d");
+    ctx.fillStyle = grd;
+    ctx.shadowColor = "#ff7a45";
+    ctx.shadowBlur = 22;
+    // curled body (head at right, tail curling up-left)
+    bodySegments([
+      { x: r * 0.85, y: 0.0, s: r * 0.55 },
+      { x: r * 0.35, y: -0.05 * r, s: r * 0.6 },
+      { x: -0.15 * r, y: -0.18 * r, s: r * 0.52 },
+      { x: -0.6 * r, y: -0.4 * r, s: r * 0.42 },
+      { x: -0.95 * r, y: -0.72 * r, s: r * 0.3 },
+    ]);
+    // tail fan
+    ctx.beginPath();
+    ctx.moveTo(-0.95 * r, -0.72 * r);
+    ctx.lineTo(-1.5 * r, -1.05 * r);
+    ctx.lineTo(-1.15 * r, -0.55 * r);
+    ctx.lineTo(-1.55 * r, -0.55 * r);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    // legs
+    ctx.strokeStyle = "#ff8a5c"; ctx.lineWidth = 1.3;
+    for (let i = 0; i < 4; i++) {
+      const lx = r * (0.55 - i * 0.35);
+      ctx.beginPath(); ctx.moveTo(lx, r * 0.35); ctx.lineTo(lx - 3, r * 0.8); ctx.stroke();
+    }
+    // antennae
+    ctx.strokeStyle = "#ffb59c"; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(r * 1.15, -0.05 * r); ctx.quadraticCurveTo(r * 2.1, r * 0.2, r * 2.6, r * 0.95);
+    ctx.moveTo(r * 1.15, 0.1 * r); ctx.quadraticCurveTo(r * 1.9, r * 0.6, r * 2.1, r * 1.3);
+    ctx.stroke();
+    // rostrum (pointy nose)
+    ctx.strokeStyle = "#ff9c7a"; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(r * 1.3, -0.1 * r); ctx.lineTo(r * 1.85, -0.35 * r); ctx.stroke();
+    // eye
+    ctx.fillStyle = "#160a05";
+    ctx.beginPath(); ctx.arc(r * 0.95, -r * 0.18, r * 0.15, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(r * 0.99, -r * 0.22, r * 0.05, 0, 7); ctx.fill();
+  }
+
+  function drawLobster(rBase) {
+    const r = rBase * 1.15;
+    const grd = ctx.createLinearGradient(-r, -r, r, r);
+    grd.addColorStop(0, "#ff6b6b");
+    grd.addColorStop(1, "#c81e1e");
+    ctx.fillStyle = grd;
+    ctx.shadowColor = "#ff3a3a";
+    ctx.shadowBlur = 26;
+    // chunkier, straighter body
+    bodySegments([
+      { x: r * 0.65, y: 0, s: r * 0.6 },
+      { x: r * 0.1, y: 0, s: r * 0.62 },
+      { x: -0.45 * r, y: 0, s: r * 0.54 },
+      { x: -0.9 * r, y: -0.05 * r, s: r * 0.44 },
+      { x: -1.3 * r, y: -0.12 * r, s: r * 0.32 },
+    ]);
+    // tail fan
+    ctx.beginPath();
+    ctx.moveTo(-1.3 * r, -0.12 * r);
+    ctx.lineTo(-1.95 * r, -0.5 * r);
+    ctx.lineTo(-1.8 * r, 0);
+    ctx.lineTo(-1.95 * r, 0.5 * r);
+    ctx.closePath(); ctx.fill();
+    // claw arms
+    ctx.strokeStyle = "#e23a3a"; ctx.lineWidth = r * 0.18;
+    ctx.beginPath(); ctx.moveTo(r * 0.85, -r * 0.25); ctx.lineTo(r * 1.45, -r * 0.55); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(r * 0.85, r * 0.25); ctx.lineTo(r * 1.45, r * 0.55); ctx.stroke();
+    // pincers
+    ctx.fillStyle = grd;
+    drawClaw(r * 1.65, -r * 0.65, r);
+    drawClaw(r * 1.65, r * 0.65, r);
+    ctx.shadowBlur = 0;
+    // antennae
+    ctx.strokeStyle = "#ff7a7a"; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(r * 1.05, -0.1 * r); ctx.quadraticCurveTo(r * 2.3, -r * 0.3, r * 2.9, -r * 0.9);
+    ctx.moveTo(r * 1.05, 0.1 * r); ctx.quadraticCurveTo(r * 2.3, r * 0.3, r * 2.9, r * 0.9);
+    ctx.stroke();
+    // eyes
+    ctx.fillStyle = "#160505";
+    ctx.beginPath(); ctx.arc(r * 0.9, -r * 0.22, r * 0.13, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.9, r * 0.22, r * 0.13, 0, 7); ctx.fill();
+  }
+
+  function drawClaw(x, y, r) {
+    ctx.save();
+    ctx.translate(x, y);
+    // rotate claw slightly outward based on sign of y
+    ctx.rotate(y < 0 ? -0.5 : 0.5);
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.45, r * 0.3, 0, 0, 7); ctx.fill();
+    // pincer tip notch
+    ctx.beginPath(); ctx.ellipse(r * 0.35, -r * 0.05, r * 0.22, r * 0.12, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+
+  function onLevelUp() {
+    burst(player.x, player.y, "#ffd83a", 28, 240);
+    burst(player.x, player.y, "#ff5a5a", 18, 180);
+    toast("🦞 LEVEL UP — YOU'RE A LOBSTER!");
+    beep(500, 0.12, "triangle", 0.06);
+    setTimeout(() => beep(750, 0.14, "triangle", 0.06), 90);
+    setTimeout(() => beep(1000, 0.16, "triangle", 0.06), 180);
   }
 
   function roundRect(x, y, w, h, r) {
@@ -390,11 +532,12 @@
 
   // ---------- Share (virality) ----------
   function shareScore() {
-    const blocks = "🟦".repeat(Math.min(10, Math.max(1, Math.round(score / 5)))) || "🟦";
-    const text = `NEON DASH ⚡\nScore: ${score}  (best ${store.best})\n${blocks}\nCan you beat me?`;
+    const critter = score >= LEVELUP_SCORE ? "🦞 became a LOBSTER" : "🦐 stayed a prawn";
+    const blocks = "🦐".repeat(Math.min(10, Math.max(1, Math.round(score / 5)))) || "🦐";
+    const text = `PRAWN DASH 🦐\nScore: ${score}  (best ${store.best}) — ${critter}!\n${blocks}\nCan you out-swim me?`;
     const url = location.href;
     if (navigator.share) {
-      navigator.share({ title: "Neon Dash", text, url }).catch(() => {});
+      navigator.share({ title: "Prawn Dash", text, url }).catch(() => {});
     } else if (navigator.clipboard) {
       navigator.clipboard.writeText(text + "\n" + url).then(
         () => toast("Score copied — paste & share! 📋"),
