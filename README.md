@@ -9,7 +9,7 @@ Tap / click / press **Space** to swim a **prawn** through a glowing coral reef. 
 ## ✨ Features
 
 - **Addictive core loop** — instant tap-to-retry, escalating speed & shrinking gaps, near-miss tension
-- **Prawn → Lobster level-up** — reach score 10 and your critter evolves (with a celebration burst + sound)
+- **4-tier evolution** — 🦐 Prawn → 🦞 Lobster (10) → 🦀 Crab (25) → 🐙 Kraken (45), each with a celebration burst + rising chime + "EVOLVED!" popup, and shown on the game-over screen
 - **Underwater theme** — ocean gradient, rising bubbles, glowing coral/kelp obstacles, hand-drawn prawn & lobster
 - **Polished visuals** — glow, particle bursts, light specks, bubble trail, screen shake
 - **Sound with zero asset files** — tiny built-in WebAudio synth for flaps/scores/crashes
