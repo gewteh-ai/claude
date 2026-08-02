@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a1f" />
+  <title>Neon Dash — One-Tap Arcade</title>
+
+  <!-- Social sharing (Open Graph) -->
+  <meta property="og:title" content="Neon Dash" />
+  <meta property="og:description" content="One tap. Endless neon. Beat my high score!" />
+  <meta property="og:type" content="website" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="game-wrap">
+    <canvas id="game"></canvas>
+
+    <!-- HUD -->
+    <div id="hud" class="hud hidden">
+      <div class="hud-score" id="hud-score">0</div>
+      <div class="hud-best">BEST <span id="hud-best">0</span></div>
+    </div>
+
+    <!-- Start screen -->
+    <div id="start-screen" class="screen">
+      <h1 class="logo">NEON<span>DASH</span></h1>
+      <p class="tagline">One tap. Endless neon.</p>
+      <button class="btn btn-primary" id="btn-start">TAP TO PLAY</button>
+      <div class="hint">Tap / Click / Space to fly</div>
+      <div class="best-line">Best: <span id="start-best">0</span> &nbsp;·&nbsp; Streak: <span id="start-streak">0</span></div>
+    </div>
+
+    <!-- Game over screen -->
+    <div id="gameover-screen" class="screen hidden">
+      <h2 class="go-title">GAME OVER</h2>
+      <div class="go-score">
+        <div class="go-score-num" id="go-score">0</div>
+        <div class="go-score-label">SCORE</div>
+      </div>
+      <div class="go-best" id="go-best-line">Best: <span id="go-best">0</span></div>
+      <div id="new-best-badge" class="new-best hidden">NEW BEST!</div>
+
+      <!-- Monetization hook: revive (mockable, no keys needed) -->
+      <button class="btn btn-revive hidden" id="btn-revive">▶ REVIVE (watch ad)</button>
+
+      <button class="btn btn-primary" id="btn-retry">RETRY</button>
+      <button class="btn btn-ghost" id="btn-share">SHARE SCORE</button>
+
+      <!-- Monetization hook: ad slot (drop in AdSense/Adsterra later) -->
+      <div class="ad-slot" id="ad-slot" data-ad="gameover-banner">
+        <span>ad slot</span>
+      </div>
+    </div>
+
+    <!-- Top-right controls -->
+    <div class="top-controls">
+      <button class="icon-btn" id="btn-sound" title="Sound">🔊</button>
+    </div>
+
+    <!-- Share toast -->
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
