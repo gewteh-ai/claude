@@ -14,7 +14,7 @@
   <meta property="og:description" content="Swim the prawn through the reef. Survive long enough to become the lobster! 🦞" />
   <meta property="og:type" content="website" />
 
-  <link rel="stylesheet" href="style.css?v=3" />
+  <link rel="stylesheet" href="style.css?v=4" />
 </head>
 <body>
   <div id="game-wrap">
@@ -24,7 +24,17 @@
     <div id="hud" class="hud hidden">
       <div class="hud-score" id="hud-score">0</div>
       <div class="hud-best">BEST <span id="hud-best">0</span></div>
+      <div class="hud-combo hidden" id="hud-combo"></div>
     </div>
+
+    <!-- Boost meter + button -->
+    <div class="boost-wrap hidden" id="boost-wrap">
+      <div class="boost-meter"><div class="boost-fill" id="boost-fill"></div></div>
+      <button class="boost-btn hidden" id="btn-boost">⚡ BOOST</button>
+    </div>
+
+    <!-- Milestone banner -->
+    <div class="banner hidden" id="banner"></div>
 
     <!-- Start screen -->
     <div id="start-screen" class="screen">
@@ -32,7 +42,7 @@
       <p class="tagline">🦐 Swim the reef. Keep scoring to evolve!</p>
       <div class="evo">🦐 → 🦞 → 🦀 → 🐙<small>PRAWN · LOBSTER (10) · CRAB (25) · KRAKEN (45)</small></div>
       <button class="btn btn-primary" id="btn-start">TAP TO SWIM</button>
-      <div class="hint">Tap / Click / Space to swim up</div>
+      <div class="hint">Tap / Space to swim · grab 🫧 pearls · ⚡ Boost when full</div>
       <div class="best-line">Best: <span id="start-best">0</span> &nbsp;·&nbsp; Streak: <span id="start-streak">0</span></div>
     </div>
 
@@ -68,6 +78,6 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script src="game.js?v=3"></script>
+  <script src="game.js?v=4"></script>
 </body>
 </html>

@@ -236,3 +236,86 @@ canvas#game {
 }
 
 .hidden { display: none !important; }
+
+
+/* ---------- Excitement Pack UI ---------- */
+.hud-combo {
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ffe259;
+  text-shadow: 0 0 14px rgba(255,200,60,0.7);
+}
+
+.boost-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.boost-meter {
+  width: min(240px, 62vw);
+  height: 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  overflow: hidden;
+}
+.boost-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #38c6ff, #ffe259);
+  box-shadow: 0 0 12px rgba(120,220,255,0.6);
+  transition: width 0.12s linear;
+}
+.boost-btn {
+  pointer-events: auto;
+  font-family: inherit;
+  font-weight: 900;
+  letter-spacing: 2px;
+  font-size: 20px;
+  padding: 14px 40px;
+  border: none;
+  border-radius: 40px;
+  color: #2a1500;
+  background: linear-gradient(90deg, #ffe259, #ff9a00);
+  box-shadow: 0 0 26px rgba(255,190,0,0.7);
+  cursor: pointer;
+  animation: boost-pulse 0.7s ease-in-out infinite;
+}
+.boost-btn:active { transform: scale(0.94); }
+@keyframes boost-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.banner {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%);
+  z-index: 12;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #fff;
+  text-shadow: 0 0 22px var(--neon-cyan), 0 0 44px var(--neon-purple);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.banner-anim { animation: banner-pop 1.4s ease forwards; }
+@keyframes banner-pop {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  15%  { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+  30%  { transform: translate(-50%, -50%) scale(1); }
+  75%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
+}
