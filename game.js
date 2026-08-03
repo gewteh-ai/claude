@@ -50,6 +50,9 @@
     toast: document.getElementById("toast"),
     reward: document.getElementById("reward"),
     btnAttack: document.getElementById("btn-attack"),
+    movePad: document.getElementById("move-pad"),
+    btnUp: document.getElementById("btn-up"),
+    btnDown: document.getElementById("btn-down"),
   };
 
   // ---------- Persistent state ----------
@@ -241,6 +244,15 @@
     }
   }
 
+  function dive() {
+    if (state === STATE.MENU) { startGame(); return; }
+    if (state === STATE.PLAY) {
+      player.vy = 470; // dart downward
+      burst(player.x - 8, player.y - 8, "#9fe8ff", 5, 60);
+      beep(220, 0.08, "sine", 0.05);
+    }
+  }
+
   function onPress(e) {
     // ignore taps on real buttons (they have their own handlers)
     if (e.target.closest("button")) return;
@@ -276,6 +288,7 @@
     el.boostWrap.classList.remove("hidden");
     el.boostFill.style.width = "0%";
     el.btnAttack.classList.toggle("hidden", ammo <= 0);
+    el.movePad.classList.remove("hidden");
     lastTime = performance.now();
   }
 
@@ -300,6 +313,7 @@
       el.boostWrap.classList.add("hidden");
       el.btnBoost.classList.add("hidden");
       el.btnAttack.classList.add("hidden");
+      el.movePad.classList.add("hidden");
       el.goScore.textContent = score;
       const reached = TIERS[levelForScore(score)];
       el.goCritter.textContent = `${reached.emoji} ${reached.name}`;
@@ -1476,7 +1490,13 @@
   el.btnRevive.addEventListener("click", revive);
   el.btnBoost.addEventListener("click", doBoost);
   el.btnAttack.addEventListener("click", fireShot);
-  window.addEventListener("keydown", (e) => { if (e.code === "KeyF") fireShot(); else if (e.code === "KeyB") doBoost(); });
+  el.btnUp.addEventListener("pointerdown", (e) => { e.preventDefault(); flap(); });
+  el.btnDown.addEventListener("pointerdown", (e) => { e.preventDefault(); dive(); });
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "KeyF") fireShot();
+    else if (e.code === "KeyB") doBoost();
+    else if (e.code === "ArrowDown") { dive(); e.preventDefault(); }
+  });
   // keyboard: B triggers boost
   window.addEventListener("keydown", (e) => { if (e.code === "KeyB") doBoost(); });
   el.btnSound.addEventListener("click", () => {
