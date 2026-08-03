@@ -13,7 +13,7 @@
   <meta property="og:description" content="Swim the reef, grab pearls, open mystery boxes, and evolve from prawn to leviathan!" />
   <meta property="og:type" content="website" />
 
-  <link rel="stylesheet" href="style.css?v=17" />
+  <link rel="stylesheet" href="style.css?v=18" />
 </head>
 <body>
   <div id="game-wrap">
@@ -32,6 +32,9 @@
       <button class="boost-btn hidden" id="btn-boost">🚀 JET</button>
     </div>
 
+    <!-- Attack button (harpoon the jellyfish) -->
+    <button class="attack-btn hidden" id="btn-attack">🔱</button>
+
     <!-- Milestone banner -->
     <div class="banner hidden" id="banner"></div>
 
@@ -44,7 +47,7 @@
       <p class="tagline">🦐 Swim the reef. Keep scoring to evolve!</p>
       <div class="evo">🦐 → 🦞 → 🦀 → 🐙 → 🐋<small>LOBSTER 45 · CRAB 120 · KRAKEN 250 · LEVIATHAN 450</small></div>
       <button class="btn btn-primary" id="btn-start">TAP TO SWIM</button>
-      <div class="hint">Tap / Space to swim · grab 🫧 pearls · open 🎁 boxes · 🚀 JET · 🦈 outswim the shark in the deep!</div>
+      <div class="hint">Tap / Space to swim · 🫧 pearls · 🎁 boxes · 🚀 JET · 🔱 harpoon the jellyfish · 🦈 outswim the shark!</div>
       <div class="best-line">Best: <span id="start-best">0</span> &nbsp;·&nbsp; Streak: <span id="start-streak">0</span></div>
     </div>
 
@@ -75,6 +78,6 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script src="game.js?v=17"></script>
+  <script src="game.js?v=18"></script>
 </body>
 </html>

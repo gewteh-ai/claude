@@ -49,6 +49,7 @@
     btnSound: document.getElementById("btn-sound"),
     toast: document.getElementById("toast"),
     reward: document.getElementById("reward"),
+    btnAttack: document.getElementById("btn-attack"),
   };
 
   // ---------- Persistent state ----------
@@ -106,7 +107,7 @@
   let boxes, boxTimer, fish, fishTimer, weeds, bgScroll;
   let curBiome, bgTop, bgBot, mag, dbl;
   let boss, bossNext, bossFirstDone;
-  let lives, spd, firstBoxDone;
+  let lives, spd, firstBoxDone, ammo, shots;
   let lastTime = 0;
 
   function reset() {
@@ -140,8 +141,9 @@
     // boss chase
     boss = { active: false, x: -120, y: H * 0.5, phase: "", timer: 0, snap: 0, lunge: 0 };
     bossNext = 55; bossFirstDone = false;
-    // revive chances + speed power-up
+    // revive chances + speed power-up + harpoons
     lives = 2; spd = 0;
+    ammo = 3; shots = [];
   }
 
   // ---------- Starfield (parallax) ----------
@@ -261,6 +263,7 @@
     el.banner.classList.add("hidden");
     el.boostWrap.classList.remove("hidden");
     el.boostFill.style.width = "0%";
+    el.btnAttack.classList.toggle("hidden", ammo <= 0);
     lastTime = performance.now();
   }
 
@@ -284,6 +287,7 @@
       el.hudCombo.classList.add("hidden");
       el.boostWrap.classList.add("hidden");
       el.btnBoost.classList.add("hidden");
+      el.btnAttack.classList.add("hidden");
       el.goScore.textContent = score;
       const reached = TIERS[levelForScore(score)];
       el.goCritter.textContent = `${reached.emoji} ${reached.name}`;
@@ -374,6 +378,7 @@
     { txt: "💰 DOUBLE SCORE 8s", act: () => { dbl = Math.max(dbl, 8); } },
     { txt: "🌊 2× SWIM 5s", act: () => { spd = Math.max(spd, 5); } },
     { txt: "🛟 +1 CHANCE", act: () => { lives = Math.min(5, lives + 1); } },
+    { txt: "🔱 HARPOON +3", act: () => { ammo += 3; } },
   ];
   function openBox(bx) {
     bx.got = true;
@@ -500,6 +505,14 @@
     setTimeout(() => beep(300, 0.2, "sawtooth", 0.05), 120);
   }
 
+  // ---------- Harpoon (attack the jellyfish) ----------
+  function fireShot() {
+    if (state !== STATE.PLAY || ammo <= 0) return;
+    ammo--;
+    shots.push({ x: player.x + PLAYER_R, y: player.y, vx: 640, dead: false });
+    beep(880, 0.06, "square", 0.045);
+  }
+
   function updateHUD() {
     el.hudScore.textContent = score;
     if (multiplier > 1 || combo > 1) {
@@ -510,6 +523,7 @@
     }
     el.boostFill.style.width = Math.min(100, (boost / JET_NEED) * 100) + "%";
     el.btnBoost.classList.toggle("hidden", boost < JET_NEED || boosting > 0 || jetCd > 0);
+    el.btnAttack.classList.toggle("hidden", ammo <= 0);
   }
 
   let bannerTimer = null;
@@ -700,6 +714,23 @@
       }
       enemies = enemies.filter(en => !en.hit && en.x > -50);
 
+      // harpoons vs jellyfish
+      for (const sh of shots) {
+        sh.x += sh.vx * gdt;
+        for (const en of enemies) {
+          if (en.hit) continue;
+          const ey = enemyY(en);
+          if (Math.abs(sh.x - en.x) < en.r + 8 && Math.abs(sh.y - ey) < en.r + 8) {
+            en.hit = true; sh.dead = true;
+            burst(en.x, ey, "#c9b0ff", 18, 220);
+            addScore(3, en.x, ey - 10, "+3", "#c9b0ff");
+            beep(520, 0.1, "square", 0.05);
+          }
+        }
+      }
+      shots = shots.filter(sh => !sh.dead && sh.x < W + 20);
+      enemies = enemies.filter(en => !en.hit);
+
       // boss predator chase
       updateBoss(realDt, gdt);
 
@@ -778,6 +809,17 @@
     // enemies (jellyfish)
     for (const en of enemies) { drawJelly(en.x, enemyY(en), en.r, en.pulse); }
 
+    // harpoon shots
+    for (const sh of shots) {
+      ctx.save();
+      ctx.shadowColor = "#7fe8ff"; ctx.shadowBlur = 10;
+      ctx.fillStyle = "#dff6ff";
+      ctx.beginPath(); ctx.ellipse(sh.x, sh.y, 11, 4, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "#7fe8ff";
+      ctx.beginPath(); ctx.moveTo(sh.x + 11, sh.y - 4); ctx.lineTo(sh.x + 21, sh.y); ctx.lineTo(sh.x + 11, sh.y + 4); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+
     // obstacles
     for (const o of obstacles) {
       drawObstacle(o);
@@ -853,6 +895,7 @@
       ctx.font = "700 18px 'Trebuchet MS', sans-serif"; ctx.textAlign = "left";
       let iy = 40;
       ctx.fillStyle = "#ffd24d"; ctx.fillText("🛟 " + lives, 16, iy); iy += 26;
+      ctx.fillStyle = "#bff0ff"; ctx.fillText("🔱 " + ammo, 16, iy); iy += 26;
       if (mag > 0) { ctx.fillStyle = "#8fe8ff"; ctx.fillText("🧲 " + Math.ceil(mag) + "s", 16, iy); iy += 26; }
       if (dbl > 0) { ctx.fillStyle = "#ffe259"; ctx.fillText("💰 2× " + Math.ceil(dbl) + "s", 16, iy); iy += 26; }
       if (spd > 0) { ctx.fillStyle = "#8fffa0"; ctx.fillText("🌊 2× " + Math.ceil(spd) + "s", 16, iy); iy += 26; }
@@ -883,29 +926,52 @@
 
   function drawJelly(x, y, r, pulse) {
     ctx.save();
-    const squash = 1 + Math.sin(pulse) * 0.12;
-    ctx.shadowColor = "#b98bff"; ctx.shadowBlur = 18;
-    // tentacles
-    ctx.strokeStyle = "rgba(190,150,255,0.7)"; ctx.lineWidth = 2.2; ctx.lineCap = "round";
-    for (let i = -2; i <= 2; i++) {
-      const tx = x + i * (r * 0.28);
+    const squash = 1 + Math.sin(pulse) * 0.1;
+    ctx.shadowColor = "#c39bff"; ctx.shadowBlur = 16;
+    ctx.lineCap = "round";
+    // long wavy stinging tentacles
+    ctx.strokeStyle = "rgba(180,140,255,0.8)"; ctx.lineWidth = 2.2;
+    for (let i = -3; i <= 3; i++) {
+      const tx = x + i * (r * 0.22);
+      const s1 = Math.sin(pulse + i) * 8, s2 = Math.sin(pulse * 1.3 + i) * 12;
+      ctx.beginPath();
+      ctx.moveTo(tx, y + r * 0.35);
+      ctx.bezierCurveTo(tx + s1, y + r * 0.95, tx - s2, y + r * 1.45, tx + s2 * 0.6, y + r * 2.0);
+      ctx.stroke();
+    }
+    // thicker frilly oral arms
+    ctx.strokeStyle = "rgba(214,175,255,0.65)"; ctx.lineWidth = 4.5;
+    for (let i = -1; i <= 1; i++) {
+      const tx = x + i * (r * 0.42);
       ctx.beginPath();
       ctx.moveTo(tx, y + r * 0.3);
-      ctx.quadraticCurveTo(tx + Math.sin(pulse + i) * 6, y + r * 1.0, tx + Math.sin(pulse + i) * 10, y + r * 1.6);
+      ctx.quadraticCurveTo(tx + Math.sin(pulse + i) * 7, y + r * 0.85, tx, y + r * 1.25);
       ctx.stroke();
     }
     ctx.lineCap = "butt";
-    // bell (dome)
-    const g = ctx.createLinearGradient(x, y - r, x, y + r);
-    g.addColorStop(0, "rgba(210,180,255,0.95)");
-    g.addColorStop(1, "rgba(150,100,255,0.55)");
+    // bell dome
+    const g = ctx.createLinearGradient(x, y - r, x, y + r * 0.5);
+    g.addColorStop(0, "rgba(228,205,255,0.97)");
+    g.addColorStop(1, "rgba(150,100,255,0.62)");
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(x, y, r * squash, r * 0.85, 0, Math.PI, 0);
+    ctx.ellipse(x, y, r * squash, r * 0.92, 0, Math.PI, 0);
     ctx.closePath(); ctx.fill();
-    // inner glow
-    ctx.fillStyle = "rgba(255,255,255,0.35)";
-    ctx.beginPath(); ctx.ellipse(x - r * 0.2, y - r * 0.25, r * 0.3, r * 0.22, 0, 0, 7); ctx.fill();
+    // rim band under the bell
+    ctx.strokeStyle = "rgba(190,150,255,0.9)"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x - r * squash, y); ctx.lineTo(x + r * squash, y); ctx.stroke();
+    ctx.shadowBlur = 0;
+    // spots on the bell
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.beginPath(); ctx.arc(x - r * 0.34, y - r * 0.4, r * 0.11, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.12, y - r * 0.52, r * 0.08, 0, 7); ctx.fill();
+    // cute eyes
+    ctx.fillStyle = "#3a1a6a";
+    ctx.beginPath(); ctx.arc(x - r * 0.24, y - r * 0.18, r * 0.11, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.24, y - r * 0.18, r * 0.11, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(x - r * 0.21, y - r * 0.21, r * 0.04, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.27, y - r * 0.21, r * 0.04, 0, 7); ctx.fill();
     ctx.restore();
   }
 
@@ -984,13 +1050,25 @@
   function drawShark(x, y, snap) {
     ctx.save();
     ctx.translate(x, y);
-    // gentle lunge scale with the snap timer
-    const s = 1 + Math.sin(snap) * 0.05;
-    ctx.scale(-s, s); // flip horizontally so the shark faces the prawn (to the right)
+    // wagging tail behind the body (back is to the left; shark faces right)
+    const wag = Math.sin(snap * 1.8);
+    ctx.save();
+    ctx.translate(-40, 2);
+    ctx.rotate(wag * 0.4);
+    ctx.shadowColor = "rgba(255,40,40,0.45)"; ctx.shadowBlur = 12;
+    ctx.fillStyle = "#33434d";
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(-30, -22);
+    ctx.lineTo(-15, 0);
+    ctx.lineTo(-30, 22);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // body (emoji) — kept horizontal & straight, facing right (head to tail level)
     ctx.shadowColor = "rgba(255,40,40,0.8)"; ctx.shadowBlur = 26;
-    ctx.font = "94px serif";
+    ctx.font = "90px serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("🦈", 0, 0);
+    ctx.save(); ctx.scale(-1, 1); ctx.fillText("🦈", 0, 0); ctx.restore();
     ctx.restore();
   }
 
@@ -1377,6 +1455,8 @@
   el.btnShare.addEventListener("click", shareScore);
   el.btnRevive.addEventListener("click", revive);
   el.btnBoost.addEventListener("click", doBoost);
+  el.btnAttack.addEventListener("click", fireShot);
+  window.addEventListener("keydown", (e) => { if (e.code === "KeyF") fireShot(); else if (e.code === "KeyB") doBoost(); });
   // keyboard: B triggers boost
   window.addEventListener("keydown", (e) => { if (e.code === "KeyB") doBoost(); });
   el.btnSound.addEventListener("click", () => {

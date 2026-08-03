@@ -413,3 +413,23 @@ canvas#game {
 
 /* nudge the JET meter up so it doesn't overlap the d-pad */
 .boost-wrap { bottom: 18px; }
+
+
+/* ---------- Attack (harpoon) button ---------- */
+.attack-btn {
+  position: absolute;
+  right: 18px;
+  bottom: 90px;
+  z-index: 7;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 1px solid rgba(127,232,255,0.5);
+  background: rgba(20,60,80,0.6);
+  color: #eaf9ff;
+  font-size: 30px;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+  box-shadow: 0 0 18px rgba(56,198,255,0.4);
+}
+.attack-btn:active { transform: scale(0.9); background: rgba(56,198,255,0.4); }
