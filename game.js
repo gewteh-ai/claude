@@ -106,6 +106,7 @@
   let boxes, boxTimer, fish, fishTimer, weeds, bgScroll;
   let curBiome, bgTop, bgBot, mag, dbl;
   let boss, bossNext, bossFirstDone;
+  let lives, spd;
   let lastTime = 0;
 
   function reset() {
@@ -139,6 +140,8 @@
     // boss chase
     boss = { active: false, x: -120, y: H * 0.5, phase: "", timer: 0, snap: 0 };
     bossNext = 55; bossFirstDone = false;
+    // revive chances + speed power-up
+    lives = 2; spd = 0;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -369,6 +372,8 @@
     { txt: "✨ COMBO x5!", act: () => { combo += 20; bumpMultiplier(); } },
     { txt: "🧲 MAGNET 6s", act: () => { mag = Math.max(mag, 6); } },
     { txt: "💰 DOUBLE SCORE 8s", act: () => { dbl = Math.max(dbl, 8); } },
+    { txt: "🌊 2× SWIM 5s", act: () => { spd = Math.max(spd, 5); } },
+    { txt: "🛟 +1 CHANCE", act: () => { lives = Math.min(5, lives + 1); } },
   ];
   function openBox(bx) {
     bx.got = true;
@@ -409,8 +414,9 @@
     boss.y += (player.y - boss.y) * Math.min(1, realDt * 2.5);
     if (boss.phase === "chase") {
       boss.timer -= realDt;
-      boss.x += (52 + elapsed * 0.6) * gdt;                 // creeps closer over time
-      boss.x = Math.max(-140, Math.min(player.x + 6, boss.x));
+      boss.x += (78 + elapsed * 0.9) * gdt;                 // fierce, faster pursuit
+      if (spd > 0) boss.x -= 170 * gdt;                     // 2× SWIM lets you pull away
+      boss.x = Math.max(-160, Math.min(player.x + 6, boss.x));
       if (boss.x >= player.x - 18 && invuln <= 0 && boosting <= 0) { die(); return; }
       if (boss.timer <= 0) {
         boss.phase = "retreat";
@@ -425,14 +431,19 @@
     }
   }
 
+  function alertShark() {
+    if (!boss.active) { startBoss(); }
+    else if (boss.phase === "chase") { boss.x += 70; boss.timer = Math.max(boss.timer, 9); }
+    addFloat(player.x, player.y - 52, "🦈 SHARK ALERTED!", "#ff6a6a");
+  }
+
   function takeHit(cause) {
     if (state !== STATE.PLAY) return;
     if (invuln > 0 || boosting > 0) return;
+    // 1) shield absorbs the hit — no chance lost
     if (shield > 0) {
       shield--;
-      invuln = 1.2;
-      flash = Math.max(flash, 0.5);
-      shake = Math.max(shake, 12);
+      invuln = 1.2; flash = Math.max(flash, 0.5); shake = Math.max(shake, 12);
       combo = 0; multiplier = 1;
       burst(player.x, player.y, "#8fe8ff", 26, 230);
       beep(320, 0.18, "square", 0.06);
@@ -441,6 +452,22 @@
       else { player.vy = FLAP_V * 0.6; }
       return;
     }
+    // 2) revive chance — you smash through, but the crash ALERTS the shark
+    if (lives > 0) {
+      lives--;
+      invuln = 1.8; flash = Math.max(flash, 0.65); shake = Math.max(shake, 18);
+      combo = 0; multiplier = 1;
+      burst(player.x, player.y, "#ff6a4a", 36, 320); // wall shatter
+      burst(player.x, player.y, "#ffffff", 20, 240);
+      beep(180, 0.28, "sawtooth", 0.09);
+      addFloat(player.x, player.y - 34, "REVIVE! " + lives + " left", "#ffd24d");
+      obstacles = obstacles.filter(o => o.x > player.x + 150);
+      enemies = enemies.filter(en => en.x > player.x + 150);
+      player.y = H * 0.45; player.vy = FLAP_V * 0.5;
+      alertShark();
+      return;
+    }
+    // 3) out of chances
     die();
   }
 
@@ -489,6 +516,7 @@
     if (jetCd > 0) jetCd -= realDt;
     if (mag > 0) mag -= realDt;
     if (dbl > 0) dbl -= realDt;
+    if (spd > 0) spd -= realDt;
     if (state === STATE.PLAY && shield < SHIELD_MAX[curLevel]) {
       shieldTimer -= realDt;
       if (shieldTimer <= 0) {
@@ -504,6 +532,7 @@
     elapsed += gdt;
     speed = Math.min(SPEED_MAX, SPEED_BASE + elapsed * 6);
     if (boosting > 0) speed *= 1.55;
+    if (spd > 0) speed *= 1.35;   // 2× SWIM power-up (faster = outrun the shark)
     const spawnInterval = Math.max(0.95, SPAWN_BASE - elapsed * 0.012);
 
     // parallax light specks
@@ -597,7 +626,7 @@
           beep(600 + score * 4, 0.06, "triangle", 0.035);
           const newLevel = levelForScore(score);
           if (newLevel > curLevel) { curLevel = newLevel; onLevelUp(TIERS[curLevel]); }
-          if (boss.active && boss.phase === "chase") boss.x -= 42; // outswim the predator
+          if (boss.active && boss.phase === "chase") boss.x -= 50; // outswim the predator
         }
         if (!o.smashed && boosting <= 0 && hits(player, o)) takeHit("obstacle");
       }
@@ -623,7 +652,7 @@
           if (boosting <= 0) boost = Math.min(JET_NEED, boost + PEARL_FILL); // no recharge mid-JET
           burst(pr.x, py, "#7fe8ff", 10, 130);
           beep(1000 + combo * 8, 0.06, "sine", 0.05);
-          if (boss.active && boss.phase === "chase") boss.x -= 12;
+          if (boss.active && boss.phase === "chase") boss.x -= 14;
         }
       }
       pearls = pearls.filter(pr => !pr.got && pr.x > -20);
@@ -802,12 +831,15 @@
       }
     }
 
-    // active power-up indicators (top-left, screen-fixed)
-    if (state === STATE.PLAY && (mag > 0 || dbl > 0)) {
+    // lives + active power-up indicators (top-left, screen-fixed)
+    if (state === STATE.PLAY) {
       ctx.font = "700 18px 'Trebuchet MS', sans-serif"; ctx.textAlign = "left";
-      let iy = 92;
+      let iy = 40;
+      ctx.fillStyle = "#ffd24d"; ctx.fillText("🛟 " + lives, 16, iy); iy += 26;
       if (mag > 0) { ctx.fillStyle = "#8fe8ff"; ctx.fillText("🧲 " + Math.ceil(mag) + "s", 16, iy); iy += 26; }
-      if (dbl > 0) { ctx.fillStyle = "#ffe259"; ctx.fillText("💰 2× " + Math.ceil(dbl) + "s", 16, iy); }
+      if (dbl > 0) { ctx.fillStyle = "#ffe259"; ctx.fillText("💰 2× " + Math.ceil(dbl) + "s", 16, iy); iy += 26; }
+      if (spd > 0) { ctx.fillStyle = "#8fffa0"; ctx.fillText("🌊 2× " + Math.ceil(spd) + "s", 16, iy); iy += 26; }
+      ctx.textAlign = "left";
     }
 
     // full-screen flash (over everything, no shake offset)
@@ -933,44 +965,67 @@
   }
 
   function drawShark(x, y, snap) {
-    const R = 44;
+    const R = 48;
     ctx.save();
     ctx.translate(x, y);
-    ctx.shadowColor = "#0a1620"; ctx.shadowBlur = 18;
+    // menacing red underglow
+    ctx.shadowColor = "#ff2a2a"; ctx.shadowBlur = 22;
     const grd = ctx.createLinearGradient(0, -R, 0, R);
-    grd.addColorStop(0, "#6b8496"); grd.addColorStop(1, "#22323e");
+    grd.addColorStop(0, "#42525f"); grd.addColorStop(0.5, "#26333d"); grd.addColorStop(1, "#121a20");
     ctx.fillStyle = grd;
-    // body (snout to the right, toward the player)
+    // sleek torpedo body with a pointed snout (aerodynamic)
     ctx.beginPath();
-    ctx.moveTo(-R * 1.7, 0);
-    ctx.quadraticCurveTo(-R * 0.4, -R * 0.85, R * 1.25, -R * 0.22);
-    ctx.quadraticCurveTo(R * 1.55, 0, R * 1.25, R * 0.22);
-    ctx.quadraticCurveTo(-R * 0.4, R * 0.85, -R * 1.7, 0);
+    ctx.moveTo(-R * 2.4, 0);
+    ctx.quadraticCurveTo(-R * 0.6, -R * 0.66, R * 0.9, -R * 0.4);
+    ctx.quadraticCurveTo(R * 1.75, -R * 0.2, R * 2.05, 0);
+    ctx.quadraticCurveTo(R * 1.75, R * 0.2, R * 0.9, R * 0.4);
+    ctx.quadraticCurveTo(-R * 0.6, R * 0.66, -R * 2.4, 0);
     ctx.closePath(); ctx.fill();
-    // tail
+    // swept crescent tail
     ctx.beginPath();
-    ctx.moveTo(-R * 1.5, 0); ctx.lineTo(-R * 2.25, -R * 0.85); ctx.lineTo(-R * 1.85, 0); ctx.lineTo(-R * 2.25, R * 0.85);
+    ctx.moveTo(-R * 2.2, 0);
+    ctx.lineTo(-R * 3.15, -R * 1.05);
+    ctx.quadraticCurveTo(-R * 2.5, -R * 0.25, -R * 2.5, 0);
+    ctx.quadraticCurveTo(-R * 2.5, R * 0.25, -R * 3.15, R * 1.05);
     ctx.closePath(); ctx.fill();
-    // dorsal + pectoral fins
-    ctx.beginPath(); ctx.moveTo(-R * 0.1, -R * 0.62); ctx.lineTo(R * 0.35, -R * 1.4); ctx.lineTo(R * 0.55, -R * 0.5); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(R * 0.2, R * 0.4); ctx.lineTo(R * 0.4, R * 1.1); ctx.lineTo(R * 0.7, R * 0.4); ctx.closePath(); ctx.fill();
+    // tall swept-back dorsal fin
+    ctx.beginPath();
+    ctx.moveTo(-R * 0.35, -R * 0.5);
+    ctx.lineTo(R * 0.55, -R * 1.75);
+    ctx.lineTo(R * 0.72, -R * 0.42);
+    ctx.closePath(); ctx.fill();
+    // swept pectoral fin
+    ctx.beginPath();
+    ctx.moveTo(R * 0.45, R * 0.32);
+    ctx.lineTo(R * 0.05, R * 1.3);
+    ctx.lineTo(R * 0.95, R * 0.45);
+    ctx.closePath(); ctx.fill();
     ctx.shadowBlur = 0;
-    // gaping, snapping mouth
-    const open = (Math.sin(snap) * 0.5 + 0.5) * R * 0.42 + R * 0.12;
-    ctx.fillStyle = "#3a0a12";
+    // gills
+    ctx.strokeStyle = "rgba(8,14,18,0.85)"; ctx.lineWidth = 2.4;
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(R * 0.55 - i * 9, -R * 0.28); ctx.lineTo(R * 0.48 - i * 9, R * 0.3); ctx.stroke(); }
+    // pale belly
+    ctx.fillStyle = "rgba(205,214,220,0.22)";
+    ctx.beginPath(); ctx.ellipse(R * 0.15, R * 0.34, R * 1.15, R * 0.26, 0, 0, 7); ctx.fill();
+    // gaping snapping jaws
+    const open = (Math.sin(snap) * 0.5 + 0.5) * R * 0.5 + R * 0.12;
+    ctx.fillStyle = "#2a0509";
     ctx.beginPath();
-    ctx.moveTo(R * 0.5, -open * 0.4); ctx.lineTo(R * 1.4, 0); ctx.lineTo(R * 0.5, open);
+    ctx.moveTo(R * 1.0, -open * 0.35); ctx.lineTo(R * 2.0, 0); ctx.lineTo(R * 1.0, open);
     ctx.closePath(); ctx.fill();
-    // teeth
-    ctx.fillStyle = "#f2f5f7";
-    for (let i = 0; i < 4; i++) {
-      const tx = R * 0.58 + i * R * 0.2;
-      ctx.beginPath(); ctx.moveTo(tx, -open * 0.4); ctx.lineTo(tx + R * 0.1, -open * 0.4 + R * 0.16); ctx.lineTo(tx + R * 0.2, -open * 0.4); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(tx, open); ctx.lineTo(tx + R * 0.1, open - R * 0.16); ctx.lineTo(tx + R * 0.2, open); ctx.closePath(); ctx.fill();
+    // rows of sharp teeth
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < 5; i++) {
+      const tx = R * 1.02 + i * R * 0.2;
+      ctx.beginPath(); ctx.moveTo(tx, -open * 0.35); ctx.lineTo(tx + R * 0.06, -open * 0.35 + R * 0.2); ctx.lineTo(tx + R * 0.14, -open * 0.35); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(tx, open); ctx.lineTo(tx + R * 0.06, open - R * 0.2); ctx.lineTo(tx + R * 0.14, open); ctx.closePath(); ctx.fill();
     }
-    // eye
-    ctx.fillStyle = "#ffdd33"; ctx.beginPath(); ctx.arc(R * 0.5, -R * 0.32, R * 0.13, 0, 7); ctx.fill();
-    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(R * 0.53, -R * 0.32, R * 0.06, 0, 7); ctx.fill();
+    // fierce glowing red eye
+    ctx.shadowColor = "#ff2a2a"; ctx.shadowBlur = 12;
+    ctx.fillStyle = "#ff2a2a";
+    ctx.beginPath(); ctx.arc(R * 0.85, -R * 0.26, R * 0.12, 0, 7); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#160000"; ctx.beginPath(); ctx.arc(R * 0.88, -R * 0.26, R * 0.05, 0, 7); ctx.fill();
     ctx.restore();
   }
 
