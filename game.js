@@ -62,15 +62,15 @@
   const GRAVITY = 1900;        // px/s^2
   const FLAP_V = -560;         // px/s
   const PLAYER_R = 16;
-  const GAP_BASE = 210;        // starting gap between obstacles
-  const GAP_MIN = 132;
-  const SPEED_BASE = 240;      // px/s horizontal
-  const SPEED_MAX = 470;
-  const SPAWN_BASE = 1.55;     // seconds between obstacles
+  const GAP_BASE = 240;        // starting gap between obstacles (more forgiving)
+  const GAP_MIN = 145;
+  const SPEED_BASE = 205;      // px/s horizontal (gentler start)
+  const SPEED_MAX = 460;
+  const SPAWN_BASE = 1.7;      // seconds between obstacles
   // ---- Excitement Pack tuning ----
   const NEARMISS = 18;                        // px closeness that counts as a "close call"
-  const SHIELD_MAX   = [0, 1, 2, 2, 3];       // shield charges by tier
-  const SHIELD_REGEN = [99, 12, 9, 7, 5];     // seconds to regen a charge by tier
+  const SHIELD_MAX   = [1, 2, 2, 3, 3];       // shield charges by tier (prawn now starts with 1)
+  const SHIELD_REGEN = [13, 11, 9, 7, 5];     // seconds to regen a charge by tier
   const JET_NEED = 100;                       // meter fill required for a JET
   const JET_TIME = 3.0;                        // seconds the JET lasts (shorter = controlled)
   const JET_MAGNET = 300;                     // px pearl-magnet radius during JET
@@ -127,7 +127,7 @@
     // excitement systems
     combo = 0; multiplier = 1; maxCombo = 0;
     pearlTimer = 1.1; enemyTimer = 3.5;
-    shield = 0; shieldTimer = SHIELD_REGEN[0];
+    shield = SHIELD_MAX[0]; shieldTimer = SHIELD_REGEN[0]; // begin with a cushion
     boost = 0; boosting = 0; invuln = 0; slowmo = 0; flash = 0; jetCd = 0;
     // mystery boxes + scenery
     boxes = []; boxTimer = 6.5;
@@ -138,7 +138,7 @@
     mag = 0; dbl = 0;
     // boss chase
     boss = { active: false, x: -120, y: H * 0.5, phase: "", timer: 0, snap: 0 };
-    bossNext = 250;
+    bossNext = 55;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -368,7 +368,7 @@
   // ---------- Boss chase (predator shark) ----------
   function startBoss() {
     boss.active = true; boss.phase = "chase"; boss.x = -100; boss.y = player.y; boss.timer = 14; boss.snap = 0;
-    bossNext += 260;
+    bossNext += 180;
     showBanner("⚠️ PREDATOR!");
     flash = Math.max(flash, 0.5); shake = Math.max(shake, 10);
     beep(90, 0.5, "sawtooth", 0.1);
@@ -472,7 +472,7 @@
     const gdt = realDt * timeScale;
 
     elapsed += gdt;
-    speed = Math.min(SPEED_MAX, SPEED_BASE + elapsed * 8);
+    speed = Math.min(SPEED_MAX, SPEED_BASE + elapsed * 6);
     if (boosting > 0) speed *= 1.55;
     const spawnInterval = Math.max(0.95, SPAWN_BASE - elapsed * 0.012);
 
