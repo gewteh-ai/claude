@@ -377,7 +377,13 @@
   ];
   function openBox(bx) {
     bx.got = true;
-    const r = BOX_REWARDS[Math.floor(Math.random() * BOX_REWARDS.length)];
+    // while the shark is hunting, boxes usually hand you the escape tool
+    let r;
+    if (boss.active && boss.phase === "chase" && Math.random() < 0.6) {
+      r = { txt: "🌊 2× SWIM 5s", act: () => { spd = Math.max(spd, 5); } };
+    } else {
+      r = BOX_REWARDS[Math.floor(Math.random() * BOX_REWARDS.length)];
+    }
     r.act();
     burst(bx.x, bx.y, "#ffe259", 26, 250);
     shake = Math.max(shake, 8); flash = Math.max(flash, 0.35);
@@ -411,7 +417,10 @@
       return;
     }
     boss.snap += realDt * 9;
-    boss.y += (player.y - boss.y) * Math.min(1, realDt * 2.5);
+    // CHASE: follow the prawn's height with a capped speed, so it trails/lags
+    // behind and has to catch up (a real pursuit, not swimming in sync)
+    const dy = player.y - boss.y;
+    boss.y += Math.sign(dy) * Math.min(Math.abs(dy), 210 * realDt);
     if (boss.phase === "chase") {
       boss.timer -= realDt;
       boss.x += (78 + elapsed * 0.9) * gdt;                 // fierce, faster pursuit
