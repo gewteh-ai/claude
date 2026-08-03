@@ -72,15 +72,17 @@
   const SHIELD_MAX   = [0, 1, 2, 2, 3];       // shield charges by tier
   const SHIELD_REGEN = [99, 12, 9, 7, 5];     // seconds to regen a charge by tier
   const JET_NEED = 100;                       // meter fill required for a JET
-  const JET_TIME = 4.5;                        // seconds the JET lasts
+  const JET_TIME = 3.0;                        // seconds the JET lasts (shorter = controlled)
   const JET_MAGNET = 300;                     // px pearl-magnet radius during JET
+  const JET_COOLDOWN = 1.6;                    // seconds after a JET before another can trigger
+  const PEARL_FILL = 7;                        // meter gained per pearl (needs ~15 pearls per JET)
   // Evolution tiers — a longer journey (drawX are hoisted fns)
   const TIERS = [
     { name: "PRAWN",     emoji: "🦐", at: 0,   draw: drawPrawn,   glow: "#ff9a4d" },
-    { name: "LOBSTER",   emoji: "🦞", at: 20,  draw: drawLobster, glow: "#ff4d4d" },
-    { name: "CRAB",      emoji: "🦀", at: 50,  draw: drawCrab,    glow: "#ff5ea8" },
-    { name: "KRAKEN",    emoji: "🐙", at: 95,  draw: drawKraken,  glow: "#b06bff" },
-    { name: "LEVIATHAN", emoji: "🐋", at: 160, draw: drawWhale,   glow: "#4db8ff" },
+    { name: "LOBSTER",   emoji: "🦞", at: 45,  draw: drawLobster, glow: "#ff4d4d" },
+    { name: "CRAB",      emoji: "🦀", at: 120, draw: drawCrab,    glow: "#ff5ea8" },
+    { name: "KRAKEN",    emoji: "🐙", at: 250, draw: drawKraken,  glow: "#b06bff" },
+    { name: "LEVIATHAN", emoji: "🐋", at: 450, draw: drawWhale,   glow: "#4db8ff" },
   ];
   function levelForScore(s) { let l = 0; for (let i = 0; i < TIERS.length; i++) if (s >= TIERS[i].at) l = i; return l; }
 
@@ -91,7 +93,7 @@
   let player, obstacles, particles, stars, farStars, bubbles, pearls, enemies, floats;
   let score, speed, spawnTimer, elapsed, shake, usedRevive, curLevel, bubbleTimer;
   let combo, multiplier, maxCombo, pearlTimer, enemyTimer;
-  let shield, shieldTimer, boost, boosting, invuln, slowmo, flash;
+  let shield, shieldTimer, boost, boosting, invuln, slowmo, flash, jetCd;
   let boxes, boxTimer, fish, fishTimer, weeds, bgScroll;
   let lastTime = 0;
 
@@ -115,7 +117,7 @@
     combo = 0; multiplier = 1; maxCombo = 0;
     pearlTimer = 1.1; enemyTimer = 3.5;
     shield = 0; shieldTimer = SHIELD_REGEN[0];
-    boost = 0; boosting = 0; invuln = 0; slowmo = 0; flash = 0;
+    boost = 0; boosting = 0; invuln = 0; slowmo = 0; flash = 0; jetCd = 0;
     // mystery boxes + scenery
     boxes = []; boxTimer = 6.5;
     fish = fish || []; fishTimer = 1.2;
@@ -362,7 +364,7 @@
   }
 
   function doBoost() {
-    if (state !== STATE.PLAY || boost < JET_NEED || boosting > 0) return;
+    if (state !== STATE.PLAY || boost < JET_NEED || boosting > 0 || jetCd > 0) return;
     boost = 0;
     boosting = JET_TIME;
     invuln = JET_TIME + 0.4;
@@ -382,7 +384,7 @@
       el.hudCombo.classList.add("hidden");
     }
     el.boostFill.style.width = Math.min(100, (boost / JET_NEED) * 100) + "%";
-    el.btnBoost.classList.toggle("hidden", boost < JET_NEED || boosting > 0);
+    el.btnBoost.classList.toggle("hidden", boost < JET_NEED || boosting > 0 || jetCd > 0);
   }
 
   let bannerTimer = null;
@@ -402,7 +404,8 @@
     if (invuln > 0) invuln -= realDt;
     if (flash > 0) flash = Math.max(0, flash - realDt * 2.2);
     if (slowmo > 0) slowmo -= realDt;
-    if (boosting > 0) boosting -= realDt;
+    if (boosting > 0) { boosting -= realDt; if (boosting <= 0) { boosting = 0; jetCd = JET_COOLDOWN; } }
+    if (jetCd > 0) jetCd -= realDt;
     if (state === STATE.PLAY && shield < SHIELD_MAX[curLevel]) {
       shieldTimer -= realDt;
       if (shieldTimer <= 0) {
@@ -417,7 +420,7 @@
 
     elapsed += gdt;
     speed = Math.min(SPEED_MAX, SPEED_BASE + elapsed * 8);
-    if (boosting > 0) speed *= 1.85;
+    if (boosting > 0) speed *= 1.55;
     const spawnInterval = Math.max(0.95, SPAWN_BASE - elapsed * 0.012);
 
     // parallax light specks
@@ -521,7 +524,7 @@
           pr.got = true;
           combo++; bumpMultiplier();
           addScore(1 * multiplier, pr.x, py - 12, "+" + (1 * multiplier), "#7fe8ff");
-          boost = Math.min(JET_NEED, boost + 12);
+          if (boosting <= 0) boost = Math.min(JET_NEED, boost + PEARL_FILL); // no recharge mid-JET
           burst(pr.x, py, "#7fe8ff", 10, 130);
           beep(1000 + combo * 8, 0.06, "sine", 0.05);
         }
