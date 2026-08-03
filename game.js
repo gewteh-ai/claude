@@ -383,7 +383,11 @@
 
   function spawnBox() {
     const margin = 95;
-    boxes.push({ x: W + 30, y: margin + Math.random() * (H - margin * 2), r: 18, spin: Math.random() * 6, got: false });
+    let p;
+    if (!firstBoxDone) { firstBoxDone = true; p = SPEED_PICKUP; }                       // early game: 2× SWIM
+    else if (boss.active && boss.phase === "chase" && Math.random() < 0.6) p = SPEED_PICKUP; // escape tool while hunted
+    else p = PICKUPS[Math.floor(Math.random() * PICKUPS.length)];
+    boxes.push({ x: W + 30, y: margin + Math.random() * (H - margin * 2), r: 18, spin: Math.random() * 6, got: false, pu: p });
   }
 
   function spawnFish() {
@@ -396,30 +400,23 @@
   }
 
   // ---------- Mystery box rewards ----------
-  const BOX_REWARDS = [
-    { txt: "🚀 JET CHARGED!", act: () => { boost = JET_NEED; } },
-    { txt: "🫧 PEARL BURST +12", act: () => { addScore(12, player.x, player.y - 20, "+12", "#7fe8ff"); } },
-    { txt: "🛡️ SHIELD +1", act: () => { shield = Math.min(3, shield + 1); invuln = Math.max(invuln, 0.4); } },
-    { txt: "⭐ SCORE +50", act: () => { addScore(50, player.x, player.y - 20, "+50", "#ffe259"); } },
-    { txt: "🐢 SLOW-MO BONUS", act: () => { slowmo = Math.max(slowmo, 1.3); addScore(5 * multiplier, player.x, player.y - 20, "+" + (5 * multiplier), "#ffe259"); } },
-    { txt: "✨ COMBO x5!", act: () => { combo += 20; bumpMultiplier(); } },
-    { txt: "🧲 MAGNET 6s", act: () => { mag = Math.max(mag, 6); } },
-    { txt: "💰 DOUBLE SCORE 8s", act: () => { dbl = Math.max(dbl, 8); } },
-    { txt: "🌊 2× SWIM 5s", act: () => { spd = Math.max(spd, 5); } },
-    { txt: "🛟 +1 CHANCE", act: () => { lives = Math.min(5, lives + 1); } },
-    { txt: "🔱 HARPOON +3", act: () => { ammo += 3; } },
+  // Labeled power-up pickups — each floats with its own icon so you know what it is
+  const PICKUPS = [
+    { icon: "🧲", color: "#8fe8ff", txt: "🧲 MAGNET 6s",  act: () => { mag = Math.max(mag, 6); } },
+    { icon: "✕2", color: "#ffe259", txt: "✕2 SCORE 8s",  act: () => { dbl = Math.max(dbl, 8); } },
+    { icon: "🌊", color: "#8fffa0", txt: "🌊 2× SWIM 5s", act: () => { spd = Math.max(spd, 5); } },
+    { icon: "🔱", color: "#bff0ff", txt: "🔱 HARPOON +3", act: () => { ammo += 3; } },
+    { icon: "🛟", color: "#ffd24d", txt: "🛟 +1 CHANCE",  act: () => { lives = Math.min(5, lives + 1); } },
+    { icon: "🚀", color: "#ffcf4d", txt: "🚀 JET CHARGED", act: () => { boost = JET_NEED; } },
+    { icon: "🛡", color: "#8fe8ff", txt: "🛡 SHIELD +1",  act: () => { shield = Math.min(3, shield + 1); } },
   ];
+  const SPEED_PICKUP = PICKUPS[2]; // 🌊 2× SWIM
   function openBox(bx) {
     bx.got = true;
-    const speedReward = { txt: "🌊 2× SWIM 5s", act: () => { spd = Math.max(spd, 5); } };
-    let r;
-    if (!firstBoxDone) { firstBoxDone = true; r = speedReward; }         // early game: guaranteed 2X
-    else if (boss.active && boss.phase === "chase" && Math.random() < 0.6) { r = speedReward; }
-    else { r = BOX_REWARDS[Math.floor(Math.random() * BOX_REWARDS.length)]; }
-    r.act();
-    burst(bx.x, bx.y, "#ffe259", 26, 250);
+    bx.pu.act();
+    burst(bx.x, bx.y, bx.pu.color, 24, 240);
     shake = Math.max(shake, 8); flash = Math.max(flash, 0.35);
-    showReward(r.txt);
+    showReward(bx.pu.txt);
     beep(720, 0.1, "triangle", 0.06); setTimeout(() => beep(1080, 0.14, "triangle", 0.06), 90);
   }
 
@@ -606,7 +603,17 @@
     if (invuln > 0) invuln -= realDt;
     if (flash > 0) flash = Math.max(0, flash - realDt * 2.2);
     if (slowmo > 0) slowmo -= realDt;
-    if (boosting > 0) { boosting -= realDt; if (boosting <= 0) { boosting = 0; jetCd = JET_COOLDOWN; } }
+    if (boosting > 0) {
+      boosting -= realDt;
+      if (boosting <= 0) {
+        boosting = 0; jetCd = JET_COOLDOWN;
+        invuln = Math.max(invuln, 1.5);                          // grace so you don't die the instant the JET ends
+        slowmo = Math.max(slowmo, 1.3);                          // ease the rhythm so you can catch on
+        obstacles = obstacles.filter(o => o.x > player.x + 180); // clear the lane right in front of you
+        enemies = enemies.filter(en => en.x > player.x + 180);
+        addFloat(player.x, player.y - 30, "phew…", "#8fffa0");
+      }
+    }
     if (jetCd > 0) jetCd -= realDt;
     if (mag > 0) mag -= realDt;
     if (dbl > 0) dbl -= realDt;
@@ -1139,22 +1146,20 @@
   }
 
   function drawBox(bx) {
+    const p = bx.pu;
     ctx.save();
-    ctx.translate(bx.x, bx.y);
-    ctx.rotate(Math.sin(bx.spin) * 0.3);
-    ctx.shadowColor = "#ffd23a"; ctx.shadowBlur = 20;
-    const g = ctx.createLinearGradient(-bx.r, -bx.r, bx.r, bx.r);
-    g.addColorStop(0, "#ffe27a"); g.addColorStop(1, "#ff9e00");
-    ctx.fillStyle = g;
-    roundRect(-bx.r, -bx.r, bx.r * 2, bx.r * 2, 5); ctx.fill();
+    ctx.translate(bx.x, bx.y + Math.sin(bx.spin) * 3); // gentle bob
+    ctx.shadowColor = p.color; ctx.shadowBlur = 18;
+    // rounded badge with the power-up's colour
+    ctx.fillStyle = "rgba(6,26,38,0.88)";
+    ctx.strokeStyle = p.color; ctx.lineWidth = 3;
+    roundRect(-bx.r, -bx.r, bx.r * 2, bx.r * 2, 8); ctx.fill(); ctx.stroke();
     ctx.shadowBlur = 0;
-    // ribbon
-    ctx.strokeStyle = "rgba(255,255,255,0.75)"; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(0, -bx.r); ctx.lineTo(0, bx.r); ctx.moveTo(-bx.r, 0); ctx.lineTo(bx.r, 0); ctx.stroke();
-    // question mark
-    ctx.fillStyle = "#7a3e00"; ctx.font = "700 18px 'Trebuchet MS', sans-serif";
+    // the icon / label so you can see what it is
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 " + Math.floor(bx.r * 1.15) + "px 'Trebuchet MS', sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("?", 0, 1);
+    ctx.fillText(p.icon, 0, 1);
     ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     ctx.restore();
   }
