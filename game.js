@@ -105,6 +105,7 @@
   let shield, shieldTimer, boost, boosting, invuln, slowmo, flash, jetCd;
   let boxes, boxTimer, fish, fishTimer, weeds, bgScroll;
   let curBiome, bgTop, bgBot, mag, dbl;
+  let boss, bossNext;
   let lastTime = 0;
 
   function reset() {
@@ -135,6 +136,9 @@
     // biomes + power-ups
     curBiome = 0; bgTop = BIOMES[0].top.slice(); bgBot = BIOMES[0].bot.slice();
     mag = 0; dbl = 0;
+    // boss chase
+    boss = { active: false, x: -120, y: H * 0.5, phase: "", timer: 0, snap: 0 };
+    bossNext = 250;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -361,6 +365,36 @@
     rewardTimer = setTimeout(() => el.reward.classList.add("hidden"), 1600);
   }
 
+  // ---------- Boss chase (predator shark) ----------
+  function startBoss() {
+    boss.active = true; boss.phase = "chase"; boss.x = -100; boss.y = player.y; boss.timer = 14; boss.snap = 0;
+    bossNext += 260;
+    showBanner("⚠️ PREDATOR!");
+    flash = Math.max(flash, 0.5); shake = Math.max(shake, 10);
+    beep(90, 0.5, "sawtooth", 0.1);
+  }
+  function updateBoss(realDt, gdt) {
+    if (!boss.active) { if (score >= bossNext) startBoss(); return; }
+    boss.snap += realDt * 9;
+    boss.y += (player.y - boss.y) * Math.min(1, realDt * 2.5);
+    if (boss.phase === "chase") {
+      boss.timer -= realDt;
+      boss.x += (52 + elapsed * 0.6) * gdt;                 // creeps closer over time
+      boss.x = Math.max(-140, Math.min(player.x + 6, boss.x));
+      if (boss.x >= player.x - 18 && invuln <= 0 && boosting <= 0) { die(); return; }
+      if (boss.timer <= 0) {
+        boss.phase = "retreat";
+        showBanner("😅 ESCAPED!");
+        addScore(25, player.x, player.y - 30, "+25", "#8fffa0");
+        boost = Math.min(JET_NEED, boost + 30);
+        beep(700, 0.12, "triangle", 0.06);
+      }
+    } else { // retreat
+      boss.x -= 240 * realDt;
+      if (boss.x < -160) boss.active = false;
+    }
+  }
+
   function takeHit(cause) {
     if (state !== STATE.PLAY) return;
     if (invuln > 0 || boosting > 0) return;
@@ -533,6 +567,7 @@
           beep(600 + score * 4, 0.06, "triangle", 0.035);
           const newLevel = levelForScore(score);
           if (newLevel > curLevel) { curLevel = newLevel; onLevelUp(TIERS[curLevel]); }
+          if (boss.active && boss.phase === "chase") boss.x -= 42; // outswim the predator
         }
         if (!o.smashed && boosting <= 0 && hits(player, o)) takeHit("obstacle");
       }
@@ -558,6 +593,7 @@
           if (boosting <= 0) boost = Math.min(JET_NEED, boost + PEARL_FILL); // no recharge mid-JET
           burst(pr.x, py, "#7fe8ff", 10, 130);
           beep(1000 + combo * 8, 0.06, "sine", 0.05);
+          if (boss.active && boss.phase === "chase") boss.x -= 12;
         }
       }
       pearls = pearls.filter(pr => !pr.got && pr.x > -20);
@@ -587,6 +623,9 @@
         }
       }
       enemies = enemies.filter(en => !en.hit && en.x > -50);
+
+      // boss predator chase
+      updateBoss(realDt, gdt);
 
       // floor / ceiling
       if (player.y + PLAYER_R > H || player.y - PLAYER_R < 0) takeHit("wall");
@@ -691,6 +730,9 @@
       ctx.restore();
     }
 
+    // boss predator (drawn just behind the player)
+    if (boss.active) drawShark(boss.x, boss.y, boss.snap);
+
     // player (only when in play / dead juice)
     if (state !== STATE.MENU) drawPlayer();
 
@@ -718,6 +760,17 @@
     ctx.textAlign = "left";
 
     ctx.restore();
+
+    // danger vignette while the predator is closing in
+    if (boss.active && boss.phase === "chase") {
+      const prox = Math.max(0, Math.min(1, 1 - (player.x - boss.x) / (player.x * 0.9)));
+      if (prox > 0.02) {
+        const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.max(W, H) * 0.72);
+        g.addColorStop(0, "rgba(255,0,30,0)");
+        g.addColorStop(1, "rgba(255,0,40," + (0.45 * prox) + ")");
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      }
+    }
 
     // active power-up indicators (top-left, screen-fixed)
     if (state === STATE.PLAY && (mag > 0 || dbl > 0)) {
@@ -847,6 +900,48 @@
       ctx.stroke();
     }
     ctx.lineCap = "butt";
+  }
+
+  function drawShark(x, y, snap) {
+    const R = 44;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.shadowColor = "#0a1620"; ctx.shadowBlur = 18;
+    const grd = ctx.createLinearGradient(0, -R, 0, R);
+    grd.addColorStop(0, "#6b8496"); grd.addColorStop(1, "#22323e");
+    ctx.fillStyle = grd;
+    // body (snout to the right, toward the player)
+    ctx.beginPath();
+    ctx.moveTo(-R * 1.7, 0);
+    ctx.quadraticCurveTo(-R * 0.4, -R * 0.85, R * 1.25, -R * 0.22);
+    ctx.quadraticCurveTo(R * 1.55, 0, R * 1.25, R * 0.22);
+    ctx.quadraticCurveTo(-R * 0.4, R * 0.85, -R * 1.7, 0);
+    ctx.closePath(); ctx.fill();
+    // tail
+    ctx.beginPath();
+    ctx.moveTo(-R * 1.5, 0); ctx.lineTo(-R * 2.25, -R * 0.85); ctx.lineTo(-R * 1.85, 0); ctx.lineTo(-R * 2.25, R * 0.85);
+    ctx.closePath(); ctx.fill();
+    // dorsal + pectoral fins
+    ctx.beginPath(); ctx.moveTo(-R * 0.1, -R * 0.62); ctx.lineTo(R * 0.35, -R * 1.4); ctx.lineTo(R * 0.55, -R * 0.5); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(R * 0.2, R * 0.4); ctx.lineTo(R * 0.4, R * 1.1); ctx.lineTo(R * 0.7, R * 0.4); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    // gaping, snapping mouth
+    const open = (Math.sin(snap) * 0.5 + 0.5) * R * 0.42 + R * 0.12;
+    ctx.fillStyle = "#3a0a12";
+    ctx.beginPath();
+    ctx.moveTo(R * 0.5, -open * 0.4); ctx.lineTo(R * 1.4, 0); ctx.lineTo(R * 0.5, open);
+    ctx.closePath(); ctx.fill();
+    // teeth
+    ctx.fillStyle = "#f2f5f7";
+    for (let i = 0; i < 4; i++) {
+      const tx = R * 0.58 + i * R * 0.2;
+      ctx.beginPath(); ctx.moveTo(tx, -open * 0.4); ctx.lineTo(tx + R * 0.1, -open * 0.4 + R * 0.16); ctx.lineTo(tx + R * 0.2, -open * 0.4); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(tx, open); ctx.lineTo(tx + R * 0.1, open - R * 0.16); ctx.lineTo(tx + R * 0.2, open); ctx.closePath(); ctx.fill();
+    }
+    // eye
+    ctx.fillStyle = "#ffdd33"; ctx.beginPath(); ctx.arc(R * 0.5, -R * 0.32, R * 0.13, 0, 7); ctx.fill();
+    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(R * 0.53, -R * 0.32, R * 0.06, 0, 7); ctx.fill();
+    ctx.restore();
   }
 
   function drawBox(bx) {

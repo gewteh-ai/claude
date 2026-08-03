@@ -16,6 +16,9 @@ Tap / click / press **Space** to swim a **prawn** through a glowing coral reef. 
 - **⏱️ Near-miss slow-mo** — squeak through a gap for a slow-motion "CLOSE!" bonus
 - **🛡️ Shield** — higher tiers gain regenerating shields that absorb a hit
 - **🪼 Jellyfish hazards** — dodge them (or smash through during a JET)
+- **🦈 Shark boss chase** — in the deep, a predator hunts you; keep scoring (pass coral, grab pearls) to push it back and survive the encounter, or get eaten
+- **🌊 Depth biomes** — the reef transforms as you dive: Coral Reef → Kelp Forest → Deep Trench → Bioluminescent Abyss, with moving gaps in the deep
+- **⚡ Power-ups** — Magnet and Double-Score from mystery boxes
 - **🌊 Living reef background** — light rays, distant coral silhouettes, swaying seaweed, and drifting fish
 - **Virality & retention** — share-score button, high score & streak saved locally
 - **Monetization hook** — game-over ad slot ready for AdSense/Adsterra
