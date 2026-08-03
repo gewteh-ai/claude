@@ -384,3 +384,32 @@ canvas#game {
   80% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -70%) scale(1); }
 }
+
+
+/* ---------- On-screen D-pad controls ---------- */
+.dpad {
+  position: absolute;
+  left: 0; right: 0; bottom: 80px;
+  z-index: 7;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  pointer-events: none;
+}
+.dbtn {
+  pointer-events: auto;
+  width: 66px; height: 66px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(10,30,45,0.5);
+  color: #eaf9ff;
+  font-size: 26px;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+  box-shadow: 0 0 16px rgba(0,0,0,0.3);
+}
+.dbtn:active { transform: scale(0.9); background: rgba(56,198,255,0.35); }
+.dbtn-jump { background: rgba(56,198,255,0.22); }
+
+/* nudge the JET meter up so it doesn't overlap the d-pad */
+.boost-wrap { bottom: 18px; }

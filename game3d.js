@@ -25,6 +25,7 @@
     boostWrap: $("boost-wrap"), boostFill: $("boost-fill"), btnBoost: $("btn-boost"),
     banner: $("banner"), reward: $("reward"), toast: $("toast"),
     btnSound: $("btn-sound"), btnMusic: $("btn-music"),
+    dpad: $("dpad"), btnLeft: $("btn-left"), btnJump: $("btn-jump"), btnRight: $("btn-right"),
   };
 
   // ---------------- Persistent store ----------------
@@ -65,27 +66,37 @@
   let ground, groundTex, sideL, sideR;
   let playerGroup, bodyMats = [];
   const entities = []; // {mesh, type, lane, r, live, ...}
-  const decor = [];    // side coral columns for motion feel
+  const decor = [];    // side kelp for motion feel
+  const bubbles3d = []; // rising bubbles for underwater feel
 
   function initThree() {
     renderer = new THREE.WebGLRenderer({ canvas: el.canvas, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x03243a);
-    scene.fog = new THREE.Fog(0x03243a, 24, 74);
+    scene.background = new THREE.Color(0x021826);
+    scene.fog = new THREE.Fog(0x021826, 16, 60);
 
-    camera = new THREE.PerspectiveCamera(64, 1, 0.1, 200);
-    camera.position.set(0, 5.2, 8.5);
-    camera.lookAt(0, 1.4, -10);
+    camera = new THREE.PerspectiveCamera(62, 1, 0.1, 200);
+    camera.position.set(0, 4.4, 7.6);
+    camera.lookAt(0, 1.0, -12);
 
-    scene.add(new THREE.AmbientLight(0x88bbff, 0.75));
-    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-    dir.position.set(4, 12, 6);
+    scene.add(new THREE.AmbientLight(0x4aa0d0, 0.7));
+    const dir = new THREE.DirectionalLight(0xbfeaff, 0.85);
+    dir.position.set(4, 14, 4);
     scene.add(dir);
-    const rim = new THREE.DirectionalLight(0x35d0ff, 0.5);
+    const rim = new THREE.DirectionalLight(0x1f7fae, 0.5);
     rim.position.set(-6, 4, -8);
     scene.add(rim);
+
+    // faint "water surface" glow overhead for god-ray feel
+    const surf = new THREE.Mesh(
+      new THREE.PlaneGeometry(40, 240),
+      new THREE.MeshBasicMaterial({ color: 0x0a5b7a, transparent: true, opacity: 0.18 })
+    );
+    surf.rotation.x = Math.PI / 2;
+    surf.position.set(0, 11, -100);
+    scene.add(surf);
 
     // ground
     groundTex = makeGroundTexture();
@@ -102,11 +113,20 @@
     scene.add(sideL);
     sideR = sideL.clone(); sideR.position.x = 8.5; scene.add(sideR);
 
-    // decorative coral columns (recycled)
-    for (let i = 0; i < 10; i++) {
-      const c = makeCoralColumn();
-      c.position.set((Math.random() < 0.5 ? -1 : 1) * (4.2 + Math.random() * 2.5), 0, -Math.random() * SPAWN_Z);
+    // decorative kelp (recycled) for motion feel
+    for (let i = 0; i < 12; i++) {
+      const c = makeKelp();
+      c.position.set((Math.random() < 0.5 ? -1 : 1) * (4.0 + Math.random() * 2.8), 0, -Math.random() * SPAWN_Z);
       scene.add(c); decor.push(c);
+    }
+
+    // rising bubbles (underwater ambience)
+    const bmat = new THREE.MeshBasicMaterial({ color: 0xbfefff, transparent: true, opacity: 0.4 });
+    for (let i = 0; i < 60; i++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.05 + Math.random() * 0.14, 8, 8), bmat);
+      b.position.set((Math.random() - 0.5) * 18, Math.random() * 10, -Math.random() * 60);
+      b.userData.vy = 0.7 + Math.random() * 1.6;
+      scene.add(b); bubbles3d.push(b);
     }
 
     // player
@@ -141,13 +161,18 @@
     return t;
   }
 
-  function makeCoralColumn() {
+  function makeKelp() {
     const g = new THREE.Group();
-    const h = 2 + Math.random() * 3;
-    const col = new THREE.Color().setHSL(0.45 + Math.random() * 0.12, 0.7, 0.5);
-    const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col.clone().multiplyScalar(0.25), roughness: 0.8 });
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.5, h, 6), mat);
-    m.position.y = h / 2; g.add(m);
+    const col = new THREE.Color().setHSL(0.33 + Math.random() * 0.08, 0.65, 0.38);
+    const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col.clone().multiplyScalar(0.2), roughness: 0.9 });
+    const blades = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < blades; i++) {
+      const h = 2.5 + Math.random() * 3.5;
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.22, h, 5), mat);
+      m.position.set((Math.random() - 0.5) * 0.8, h / 2, (Math.random() - 0.5) * 0.8);
+      g.add(m);
+    }
+    g.userData.sway = Math.random() * 6;
     return g;
   }
 
@@ -315,19 +340,28 @@
   }, { passive: true });
   window.addEventListener("touchend", (e) => {
     if (e.target.closest("button")) return;
+    if (state !== S.PLAY) { jump(); return; } // starts game
     const t = e.changedTouches[0];
     const dx = t.clientX - tsx, dy = t.clientY - tsy;
-    if (Math.abs(dx) < 24 && Math.abs(dy) < 24 && Date.now() - tst < 250) { jump(); return; } // tap = jump
-    if (Math.abs(dx) > Math.abs(dy)) moveLane(dx > 0 ? 1 : -1);
-    else if (dy < 0) jump();
+    if (Math.abs(dx) < 24 && Math.abs(dy) < 24 && Date.now() - tst < 250) { zoneAction(t.clientX); return; } // tap zones
+    if (Math.abs(dx) > Math.abs(dy)) moveLane(dx > 0 ? 1 : -1); // horizontal swipe
+    else if (dy < 0) jump();                                     // swipe up
   }, { passive: true });
 
-  // mouse click (desktop) = jump / start
+  // mouse click (desktop): left third = left, right third = right, middle = jump
   window.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "touch") return;
     if (e.target.closest("button")) return;
-    jump();
+    if (state !== S.PLAY) { jump(); return; }
+    zoneAction(e.clientX);
   });
+
+  function zoneAction(x) {
+    const third = window.innerWidth / 3;
+    if (x < third) moveLane(-1);
+    else if (x > third * 2) moveLane(1);
+    else jump();
+  }
 
   // ---------------- Flow ----------------
   function startGame() {
@@ -337,6 +371,7 @@
     el.over.classList.add("hidden");
     el.hud.classList.remove("hidden");
     el.boostWrap.classList.remove("hidden");
+    el.dpad.classList.remove("hidden");
     el.btnBoost.classList.add("hidden");
     el.banner.classList.add("hidden");
     lastTime = performance.now();
@@ -355,6 +390,7 @@
     setTimeout(() => {
       el.hud.classList.add("hidden");
       el.boostWrap.classList.add("hidden");
+      el.dpad.classList.add("hidden");
       el.btnBoost.classList.add("hidden");
       el.goScore.textContent = Math.floor(score);
       el.goCritter.textContent = `${TIERS[tier].emoji} ${TIERS[tier].name}`;
@@ -377,8 +413,20 @@
 
   // ---------------- Update ----------------
   function update(dt) {
-    // spin decor & boxes always
+    // spin boxes always
     for (const e of entities) if (e.type === "box") { e.spin += dt * 3; e.mesh.rotation.y = e.spin; e.mesh.rotation.x = e.spin * 0.5; }
+
+    // bubbles rise (and stream toward camera while playing)
+    const bz = (state === S.PLAY && speed) ? speed * dt * 0.4 : 6 * dt;
+    for (const b of bubbles3d) {
+      b.position.y += b.userData.vy * dt;
+      b.position.z += bz;
+      if (b.position.y > 10) b.position.y = -0.5;
+      if (b.position.z > RECYCLE_Z) { b.position.z = SPAWN_Z + Math.random() * 10; b.position.x = (Math.random() - 0.5) * 18; }
+    }
+    // kelp sway
+    const nowp = performance.now();
+    for (const c of decor) c.rotation.z = Math.sin(nowp / 700 + c.userData.sway) * 0.15;
 
     if (state === S.PLAY) {
       // timers
@@ -409,7 +457,7 @@
       }
       playerGroup.position.y = py;
       playerGroup.rotation.z = tilt;
-      playerGroup.rotation.y = Math.PI + tilt * 0.5; // face away from camera
+      playerGroup.rotation.y = tilt * 0.5; // back view — swims away from camera (-z)
       // little swim bob
       playerGroup.children.forEach((c, i) => { c.position.y += Math.sin(performance.now() / 150 + i) * 0.003; });
 
@@ -601,7 +649,11 @@
 
   // ---------------- Audio: SFX + procedural music ----------------
   let actx = null;
-  function ac() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); return actx; }
+  function ac() {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended" && actx.resume) actx.resume();
+    return actx;
+  }
   function beep(freq, dur, type = "sine", vol = 0.06) {
     if (!store.sound) return;
     try {
@@ -650,6 +702,9 @@
   el.btnRetry.addEventListener("click", startGame);
   el.btnShare.addEventListener("click", shareScore);
   el.btnBoost.addEventListener("click", doJet);
+  el.btnLeft.addEventListener("click", () => moveLane(-1));
+  el.btnRight.addEventListener("click", () => moveLane(1));
+  el.btnJump.addEventListener("click", jump);
   el.btnSound.addEventListener("click", () => {
     store.sound = !store.sound; save("pd3_sound", store.sound ? "on" : "off");
     el.btnSound.textContent = store.sound ? "🔊" : "🔇"; if (store.sound) beep(660, 0.08, "triangle", 0.05);

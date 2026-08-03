@@ -13,7 +13,7 @@
   <meta property="og:description" content="A 3D endless reef runner. Dodge coral, grab pearls, open mystery boxes, evolve into a Leviathan!" />
   <meta property="og:type" content="website" />
 
-  <link rel="stylesheet" href="style.css?v=6" />
+  <link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body>
   <div id="game-wrap">
@@ -61,6 +61,13 @@
       <div class="ad-slot" id="ad-slot" data-ad="gameover-banner"><span>ad slot</span></div>
     </div>
 
+    <!-- On-screen controls -->
+    <div class="dpad hidden" id="dpad">
+      <button class="dbtn" id="btn-left">◀</button>
+      <button class="dbtn dbtn-jump" id="btn-jump">▲</button>
+      <button class="dbtn" id="btn-right">▶</button>
+    </div>
+
     <!-- JET meter + button -->
     <div class="boost-wrap hidden" id="boost-wrap">
       <div class="boost-meter"><div class="boost-fill" id="boost-fill"></div></div>
@@ -91,6 +98,6 @@
 
   <!-- Three.js (loaded from CDN; runs in your browser) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="game3d.js?v=6"></script>
+  <script src="game3d.js?v=7"></script>
 </body>
 </html>
