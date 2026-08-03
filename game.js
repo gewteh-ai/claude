@@ -251,6 +251,18 @@
   window.addEventListener("pointerdown", onPress);
   window.addEventListener("keydown", onPress);
 
+  // swipe UP = fire harpoon (a distinct gesture from tapping to swim)
+  let swy = 0, swt = 0;
+  window.addEventListener("touchstart", (e) => {
+    if (e.target.closest("button")) return;
+    swy = e.changedTouches[0].clientY; swt = Date.now();
+  }, { passive: true });
+  window.addEventListener("touchend", (e) => {
+    if (e.target.closest("button")) return;
+    const dy = e.changedTouches[0].clientY - swy;
+    if (dy < -45 && Date.now() - swt < 450) fireShot();
+  }, { passive: true });
+
   // ---------- Flow ----------
   function startGame() {
     reset();
@@ -493,6 +505,22 @@
     die();
   }
 
+  // hitting a coral pillar always SMASHES it apart (then applies the cost)
+  function crashObstacle(o) {
+    if (invuln > 0 || boosting > 0) return;
+    const col = `hsl(${BIOMES[curBiome].hue + (o.hue % 40) - 20}, 78%, 56%)`;
+    burst(o.x + o.w / 2, o.gapY - 6, col, 18, 360, true);
+    burst(o.x + o.w / 2, o.gapY + o.gap + 6, col, 18, 360, true);
+    burst(player.x, player.y, "#ffffff", 14, 220);
+    o.smashed = true;
+    shake = Math.max(shake, 16); flash = Math.max(flash, 0.45);
+    beep(120, 0.3, "sawtooth", 0.1);
+    combo = 0; multiplier = 1;
+    if (shield > 0) { shield--; invuln = 1.3; addFloat(player.x, player.y - 32, "SHIELD!", "#8fe8ff"); }
+    else if (lives > 0) { lives--; invuln = 1.7; addFloat(player.x, player.y - 34, "REVIVE! " + lives + " left", "#ffd24d"); alertShark(); }
+    else { die(); }
+  }
+
   function doBoost() {
     if (state !== STATE.PLAY || boost < JET_NEED || boosting > 0 || jetCd > 0) return;
     boost = 0;
@@ -659,7 +687,7 @@
           if (newLevel > curLevel) { curLevel = newLevel; onLevelUp(TIERS[curLevel]); }
           if (boss.active && boss.phase === "chase") boss.x -= 50; // outswim the predator
         }
-        if (!o.smashed && boosting <= 0 && hits(player, o)) takeHit("obstacle");
+        if (!o.smashed && boosting <= 0 && hits(player, o)) crashObstacle(o);
       }
       obstacles = obstacles.filter(o => o.x + o.w > -30 && !o.smashed);
 
@@ -1050,23 +1078,15 @@
   function drawShark(x, y, snap) {
     ctx.save();
     ctx.translate(x, y);
-    // wagging tail behind the body (back is to the left; shark faces right)
-    const wag = Math.sin(snap * 1.8);
-    ctx.save();
-    ctx.translate(-40, 2);
-    ctx.rotate(wag * 0.4);
-    ctx.shadowColor = "rgba(255,40,40,0.45)"; ctx.shadowBlur = 12;
-    ctx.fillStyle = "#33434d";
-    ctx.beginPath();
-    ctx.moveTo(10, 0);
-    ctx.lineTo(-30, -22);
-    ctx.lineTo(-15, 0);
-    ctx.lineTo(-30, 22);
-    ctx.closePath(); ctx.fill();
-    ctx.restore();
-    // body (emoji) — kept horizontal & straight, facing right (head to tail level)
+    // swim wake — trailing bubbles behind convey motion without bending the body
+    for (let i = 1; i <= 3; i++) {
+      const a = Math.max(0, 0.2 / i + Math.sin(snap * 2 - i) * 0.06);
+      ctx.fillStyle = "rgba(180,220,255," + a + ")";
+      ctx.beginPath(); ctx.arc(-48 - i * 15, Math.sin(snap * 2 - i) * 6, 6 - i, 0, 7); ctx.fill();
+    }
+    // straight, horizontal body facing right (head-to-tail level, no tilt)
     ctx.shadowColor = "rgba(255,40,40,0.8)"; ctx.shadowBlur = 26;
-    ctx.font = "90px serif";
+    ctx.font = "92px serif";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.save(); ctx.scale(-1, 1); ctx.fillText("🦈", 0, 0); ctx.restore();
     ctx.restore();
