@@ -3,69 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#02131f" />
+  <meta name="theme-color" content="#01111c" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Prawn Dash 3D — Endless Reef Runner 🦐</title>
+  <title>Prawn Dash — Swim & Level Up 🦐</title>
 
-  <meta property="og:title" content="Prawn Dash 3D 🦐" />
-  <meta property="og:description" content="A 3D endless reef runner. Dodge coral, grab pearls, open mystery boxes, evolve into a Leviathan!" />
+  <meta property="og:title" content="Prawn Dash 🦐" />
+  <meta property="og:description" content="Swim the reef, grab pearls, open mystery boxes, and evolve from prawn to leviathan!" />
   <meta property="og:type" content="website" />
 
-  <link rel="stylesheet" href="style.css?v=7" />
+  <link rel="stylesheet" href="style.css?v=8" />
 </head>
 <body>
   <div id="game-wrap">
     <canvas id="game"></canvas>
 
-    <!-- In-run HUD -->
-    <div id="hud" class="hud3d hidden">
-      <div class="hud3d-row">
-        <div class="hud3d-cell"><span class="hud3d-num" id="hud-dist">0</span><span class="hud3d-lbl">METERS</span></div>
-        <div class="hud3d-cell"><span class="hud3d-num" id="hud-pearls">0</span><span class="hud3d-lbl">🫧 PEARLS</span></div>
-        <div class="hud3d-cell"><span class="hud3d-num" id="hud-score">0</span><span class="hud3d-lbl">SCORE</span></div>
-      </div>
-      <div class="hud3d-tier" id="hud-tier">🦐 PRAWN</div>
-    </div>
-
-    <!-- Start screen -->
-    <div id="start-screen" class="screen">
-      <h1 class="logo">PRAWN<span>DASH 3D</span></h1>
-      <p class="tagline">🦐 Endless reef runner · evolve into a 🐋</p>
-      <button class="btn btn-primary" id="btn-start">TAP TO PLAY</button>
-      <div class="hint">◀ ▶ / swipe = switch lane &nbsp;·&nbsp; ▲ / Space / swipe up = jump</div>
-      <div class="missions-box">
-        <div class="missions-title">🎯 MISSIONS</div>
-        <div id="mission-list"></div>
-      </div>
-      <div class="best-line">Best: <span id="start-best">0</span> m &nbsp;·&nbsp; 🫧 <span id="start-pearls">0</span></div>
-    </div>
-
-    <!-- Game over screen -->
-    <div id="gameover-screen" class="screen hidden">
-      <h2 class="go-title">WIPEOUT!</h2>
-      <div class="go-score">
-        <div class="go-score-num" id="go-score">0</div>
-        <div class="go-score-label">SCORE</div>
-      </div>
-      <div class="go-critter" id="go-critter">🦐 PRAWN</div>
-      <div class="go-best" id="go-stats">0 m · 🫧 0</div>
-      <div id="new-best-badge" class="new-best hidden">NEW BEST!</div>
-
-      <button class="btn btn-revive hidden" id="btn-revive">▶ REVIVE (watch ad)</button>
-      <button class="btn btn-primary" id="btn-retry">RETRY</button>
-      <button class="btn btn-ghost" id="btn-share">SHARE SCORE</button>
-
-      <!-- Monetization hook: ad slot -->
-      <div class="ad-slot" id="ad-slot" data-ad="gameover-banner"><span>ad slot</span></div>
-    </div>
-
-    <!-- On-screen controls -->
-    <div class="dpad hidden" id="dpad">
-      <button class="dbtn" id="btn-left">◀</button>
-      <button class="dbtn dbtn-jump" id="btn-jump">▲</button>
-      <button class="dbtn" id="btn-right">▶</button>
+    <!-- HUD -->
+    <div id="hud" class="hud hidden">
+      <div class="hud-score" id="hud-score">0</div>
+      <div class="hud-best">BEST <span id="hud-best">0</span></div>
+      <div class="hud-combo hidden" id="hud-combo"></div>
     </div>
 
     <!-- JET meter + button -->
@@ -80,24 +38,43 @@
     <!-- Mystery box reward popup -->
     <div class="reward hidden" id="reward"></div>
 
+    <!-- Start screen -->
+    <div id="start-screen" class="screen">
+      <h1 class="logo">PRAWN<span>DASH</span></h1>
+      <p class="tagline">🦐 Swim the reef. Keep scoring to evolve!</p>
+      <div class="evo">🦐 → 🦞 → 🦀 → 🐙 → 🐋<small>LOBSTER 20 · CRAB 50 · KRAKEN 95 · LEVIATHAN 160</small></div>
+      <button class="btn btn-primary" id="btn-start">TAP TO SWIM</button>
+      <div class="hint">Tap / Space to swim · grab 🫧 pearls · open 🎁 boxes · 🚀 JET when full</div>
+      <div class="best-line">Best: <span id="start-best">0</span> &nbsp;·&nbsp; Streak: <span id="start-streak">0</span></div>
+    </div>
+
+    <!-- Game over screen -->
+    <div id="gameover-screen" class="screen hidden">
+      <h2 class="go-title">GAME OVER</h2>
+      <div class="go-score">
+        <div class="go-score-num" id="go-score">0</div>
+        <div class="go-score-label">SCORE</div>
+      </div>
+      <div class="go-critter" id="go-critter">🦐 PRAWN</div>
+      <div class="go-best" id="go-best-line">Best: <span id="go-best">0</span></div>
+      <div id="new-best-badge" class="new-best hidden">NEW BEST!</div>
+
+      <button class="btn btn-revive hidden" id="btn-revive">▶ REVIVE (watch ad)</button>
+      <button class="btn btn-primary" id="btn-retry">RETRY</button>
+      <button class="btn btn-ghost" id="btn-share">SHARE SCORE</button>
+
+      <div class="ad-slot" id="ad-slot" data-ad="gameover-banner"><span>ad slot</span></div>
+    </div>
+
     <!-- Top-right controls -->
     <div class="top-controls">
-      <button class="icon-btn" id="btn-music" title="Music">🎵</button>
       <button class="icon-btn" id="btn-sound" title="Sound">🔊</button>
     </div>
 
-    <!-- toast -->
+    <!-- Share toast -->
     <div id="toast" class="toast hidden"></div>
-
-    <!-- 3D engine load failure notice -->
-    <div id="load-error" class="screen hidden">
-      <h2 class="go-title">3D engine didn't load</h2>
-      <p class="tagline">This needs an internet connection to load the 3D library. Check your connection and refresh.</p>
-    </div>
   </div>
 
-  <!-- Three.js (loaded from CDN; runs in your browser) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="game3d.js?v=7"></script>
+  <script src="game.js?v=8"></script>
 </body>
 </html>

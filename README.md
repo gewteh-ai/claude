@@ -1,31 +1,24 @@
-# 🦐 Prawn Dash 3D
+# 🦐 Prawn Dash
 
-A **3D endless reef runner** (Subway-Surfers style) built with **Three.js** — dodge coral, grab pearls, open mystery boxes, fill the JET, and evolve from a prawn into a **Leviathan**.
+A polished, **addictive one-tap arcade game** built with pure HTML/CSS/JS — **no dependencies, no build step, runs offline**.
 
-Three.js is loaded from a CDN, so it runs in any modern browser. The game is otherwise dependency-free static HTML/CSS/JS.
+Tap / click / press **Space** to swim a **prawn** through a glowing coral reef. Grab pearls, open mystery boxes, dodge jellyfish, and evolve all the way to a **Leviathan** 🐋.
 
-![theme: reef](https://img.shields.io/badge/theme-reef-22e0ff) ![engine: three.js](https://img.shields.io/badge/engine-three.js-9b5cff) ![type: endless runner](https://img.shields.io/badge/type-endless%20runner-ff2fb9)
-
-## 🎮 How to play
-
-| Action | Input |
-|---|---|
-| Switch lane | ◀ ▶ arrow keys, or **swipe left/right** |
-| Jump | ▲ / **Space**, tap, or **swipe up** |
-| JET (when charged) | tap the **🚀 JET** button, or press **B** |
-
-Dodge green **coral blocks** (change lane) and orange **hurdles** (jump). Run through 🫧 **pearls** to score and charge your JET.
+![theme: reef](https://img.shields.io/badge/theme-reef-22e0ff) ![deps: none](https://img.shields.io/badge/dependencies-none-9b5cff) ![offline: yes](https://img.shields.io/badge/offline-ready-ff2fb9)
 
 ## ✨ Features
 
-- **True 3D lane runner** — three lanes, jumping, speed ramp, fog + parallax reef for depth
-- **5-tier evolution** — 🦐 Prawn → 🦞 Lobster → 🦀 Crab → 🐙 Kraken → 🐋 Leviathan (your critter grows & recolors as your score climbs)
-- **🚀 JET power-up** — fill it with pearls, then fly above the reef, invincible, **magnet-vacuuming** every pearl
-- **🎁 Mystery boxes** — random rewards: instant JET, pearl burst, shield, or score bonus
-- **🎯 Missions** — persistent goals with progress bars (collect pearls, open boxes, run distance, reach a tier); complete them for a reward and a harder next goal
-- **🎵 Music + SFX** — a built-in synth soundtrack (no audio files) and sound effects, both toggleable
+- **Addictive one-tap loop** — instant tap-to-retry, escalating speed & shrinking gaps, near-miss tension
+- **5-tier evolution** — 🦐 Prawn → 🦞 Lobster (20) → 🦀 Crab (50) → 🐙 Kraken (95) → 🐋 Leviathan (160)
+- **🫧 Pearls & combos** — grab pearl clusters to build a multiplier (up to x5)
+- **🎁 Mystery boxes** — swim into a spinning box for a random reward: JET charge, pearl burst, shield, score bonus, slow-mo, or a combo boost
+- **🚀 JET power-up** — fill the meter with pearls, then fly invincibly and magnet-vacuum every pearl
+- **⏱️ Near-miss slow-mo** — squeak through a gap for a slow-motion "CLOSE!" bonus
+- **🛡️ Shield** — higher tiers gain regenerating shields that absorb a hit
+- **🪼 Jellyfish hazards** — dodge them (or smash through during a JET)
+- **🌊 Living reef background** — light rays, distant coral silhouettes, swaying seaweed, and drifting fish
+- **Virality & retention** — share-score button, high score & streak saved locally
 - **Monetization hook** — game-over ad slot ready for AdSense/Adsterra
-- Persistent best score, distance, and lifetime stats via `localStorage`
 
 ## 🚀 Run it
 
@@ -38,19 +31,22 @@ python3 -m http.server 8000    # then open http://localhost:8000
 
 Deploys free on **GitHub Pages** (via the included Actions workflow), Netlify, Cloudflare Pages, etc.
 
+## 🎮 Controls
+
+| Action | Input |
+|---|---|
+| Swim up | Tap, click, **Space**, or **↑** |
+| JET (when charged) | tap the **🚀 JET** button, or press **B** |
+
 ## 📁 Structure
 
 ```
-index.html   # markup, HUD, screens, loads Three.js (CDN) + game3d.js
-style.css    # theme, HUD, missions, popups
-game3d.js    # the 3D game: scene, runner, pearls, boxes, JET, missions, music
-game.js      # (legacy) the original 2D version, no longer loaded
+index.html   # markup, HUD, screens; loads game.js
+style.css    # reef theme, HUD, missions/reward popups
+game.js      # the game: swim loop, pearls, boxes, JET, jellyfish, evolution, reef background
+game3d.js    # (experimental) a 3D Three.js runner variant, not currently loaded
 .github/workflows/deploy.yml  # auto-deploy to GitHub Pages on push
 ```
-
-## 🔧 Tuning
-
-Open `game3d.js` and tweak the constants near the top: lane width, speed, jump, JET duration/magnet, and the `TIERS` thresholds/colors.
 
 ---
 

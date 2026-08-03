@@ -20,6 +20,7 @@
     canvas.style.height = H + "px";
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     layoutStars();
+    layoutScenery();
   }
   window.addEventListener("resize", resize);
 
@@ -47,6 +48,7 @@
     btnRevive: document.getElementById("btn-revive"),
     btnSound: document.getElementById("btn-sound"),
     toast: document.getElementById("toast"),
+    reward: document.getElementById("reward"),
   };
 
   // ---------- Persistent state ----------
@@ -90,6 +92,7 @@
   let score, speed, spawnTimer, elapsed, shake, usedRevive, curLevel, bubbleTimer;
   let combo, multiplier, maxCombo, pearlTimer, enemyTimer;
   let shield, shieldTimer, boost, boosting, invuln, slowmo, flash;
+  let boxes, boxTimer, fish, fishTimer, weeds, bgScroll;
   let lastTime = 0;
 
   function reset() {
@@ -113,6 +116,10 @@
     pearlTimer = 1.1; enemyTimer = 3.5;
     shield = 0; shieldTimer = SHIELD_REGEN[0];
     boost = 0; boosting = 0; invuln = 0; slowmo = 0; flash = 0;
+    // mystery boxes + scenery
+    boxes = []; boxTimer = 6.5;
+    fish = fish || []; fishTimer = 1.2;
+    bgScroll = 0;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -125,6 +132,15 @@
     }
     for (let i = 0; i < n * 0.6; i++) {
       farStars.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 0.9 + 0.2 });
+    }
+  }
+
+  // ---------- Scenery (seaweed strands for foreground parallax) ----------
+  function layoutScenery() {
+    weeds = [];
+    const wc = Math.ceil(W / 110) + 3;
+    for (let i = 0; i < wc; i++) {
+      weeds.push({ x: i * 110 + Math.random() * 50, h: 70 + Math.random() * 150, ph: Math.random() * 6, seg: 5 + (Math.random() * 3 | 0) });
     }
   }
 
@@ -283,6 +299,49 @@
   }
   function enemyY(en) { return en.baseY + Math.sin(elapsed * 2 + en.ph) * en.amp; }
 
+  function spawnBox() {
+    const margin = 95;
+    boxes.push({ x: W + 30, y: margin + Math.random() * (H - margin * 2), r: 18, spin: Math.random() * 6, got: false });
+  }
+
+  function spawnFish() {
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    fish.push({
+      x: dir > 0 ? -30 : W + 30, y: 40 + Math.random() * (H - 80), dir,
+      sz: 7 + Math.random() * 13, spd: 26 + Math.random() * 55, ph: Math.random() * 6,
+      col: `hsl(${170 + Math.random() * 70}, 70%, ${55 + Math.random() * 18}%)`,
+    });
+  }
+
+  // ---------- Mystery box rewards ----------
+  const BOX_REWARDS = [
+    { txt: "🚀 JET CHARGED!", act: () => { boost = JET_NEED; } },
+    { txt: "🫧 PEARL BURST +12", act: () => { addScore(12, player.x, player.y - 20, "+12", "#7fe8ff"); } },
+    { txt: "🛡️ SHIELD +1", act: () => { shield = Math.min(3, shield + 1); invuln = Math.max(invuln, 0.4); } },
+    { txt: "⭐ SCORE +50", act: () => { addScore(50, player.x, player.y - 20, "+50", "#ffe259"); } },
+    { txt: "🐢 SLOW-MO BONUS", act: () => { slowmo = Math.max(slowmo, 1.3); addScore(5 * multiplier, player.x, player.y - 20, "+" + (5 * multiplier), "#ffe259"); } },
+    { txt: "✨ COMBO x5!", act: () => { combo += 20; bumpMultiplier(); } },
+  ];
+  function openBox(bx) {
+    bx.got = true;
+    const r = BOX_REWARDS[Math.floor(Math.random() * BOX_REWARDS.length)];
+    r.act();
+    burst(bx.x, bx.y, "#ffe259", 26, 250);
+    shake = Math.max(shake, 8); flash = Math.max(flash, 0.35);
+    showReward(r.txt);
+    beep(720, 0.1, "triangle", 0.06); setTimeout(() => beep(1080, 0.14, "triangle", 0.06), 90);
+  }
+
+  let rewardTimer = null;
+  function showReward(text) {
+    el.reward.textContent = text;
+    el.reward.classList.remove("hidden", "reward-anim");
+    void el.reward.offsetWidth;
+    el.reward.classList.add("reward-anim");
+    clearTimeout(rewardTimer);
+    rewardTimer = setTimeout(() => el.reward.classList.add("hidden"), 1600);
+  }
+
   function takeHit(cause) {
     if (state !== STATE.PLAY) return;
     if (invuln > 0 || boosting > 0) return;
@@ -374,6 +433,13 @@
     for (const b of bubbles) { b.y -= b.vy * realDt; b.ph += realDt * 2; b.x += Math.sin(b.ph) * b.wob * realDt; }
     bubbles = bubbles.filter(b => b.y > -20);
 
+    // background scroll + ambient fish (also on menus)
+    bgScroll += speed * gdt * 0.15;
+    fishTimer -= realDt;
+    if (fishTimer <= 0) { spawnFish(); fishTimer = 0.7 + Math.random() * 1.6; }
+    for (const f of fish) { f.x += f.dir * f.spd * realDt; f.y += Math.sin(elapsed * 2 + f.ph) * 8 * realDt; }
+    fish = fish.filter(f => f.x > -60 && f.x < W + 60);
+
     // floating score texts
     for (const f of floats) { f.y -= 42 * realDt; f.life -= realDt; }
     floats = floats.filter(f => f.life > 0);
@@ -406,6 +472,8 @@
         enemyTimer -= gdt;
         if (enemyTimer <= 0) { spawnEnemy(); enemyTimer = 2.6 + Math.random() * 2.6; }
       }
+      boxTimer -= gdt;
+      if (boxTimer <= 0) { spawnBox(); boxTimer = 7 + Math.random() * 5; }
 
       // obstacles
       for (const o of obstacles) {
@@ -460,6 +528,18 @@
       }
       pearls = pearls.filter(pr => !pr.got && pr.x > -20);
 
+      // mystery boxes
+      for (const bx of boxes) {
+        bx.x -= speed * gdt; bx.spin += realDt * 3;
+        if (boosting > 0 && !bx.got) { // JET magnet grabs boxes too
+          const mdx = player.x - bx.x, mdy = player.y - bx.y; const md = Math.hypot(mdx, mdy) || 1;
+          if (md < JET_MAGNET) { bx.x += (mdx / md) * 520 * gdt; bx.y += (mdy / md) * 520 * gdt; }
+        }
+        const dx = bx.x - player.x, dy = bx.y - player.y;
+        if (!bx.got && dx * dx + dy * dy < (PLAYER_R + bx.r + 6) * (PLAYER_R + bx.r + 6)) openBox(bx);
+      }
+      boxes = boxes.filter(bx => !bx.got && bx.x > -40);
+
       // enemies (jellyfish)
       for (const en of enemies) {
         en.x -= (speed * 0.82) * gdt; en.pulse += realDt * 3;
@@ -504,6 +584,10 @@
     ctx.save();
     if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
 
+    // background layers
+    drawGodRays();
+    drawReef();
+
     // far stars
     ctx.fillStyle = "rgba(180,200,255,0.35)";
     for (const s of farStars) { ctx.fillRect(s.x, s.y, s.r, s.r); }
@@ -513,6 +597,10 @@
       ctx.fillStyle = `rgba(150,225,255,${a})`;
       ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill();
     }
+
+    // drifting fish + swaying seaweed
+    drawFishAll();
+    drawSeaweed();
 
     // rising bubbles
     ctx.lineWidth = 1;
@@ -527,6 +615,9 @@
 
     // pearls
     for (const pr of pearls) { drawPearl(pr.x, pr.y + Math.sin(pr.ph) * 4, pr.r); }
+
+    // mystery boxes
+    for (const bx of boxes) drawBox(bx);
 
     // enemies (jellyfish)
     for (const en of enemies) { drawJelly(en.x, enemyY(en), en.r, en.pulse); }
@@ -634,6 +725,99 @@
     // inner glow
     ctx.fillStyle = "rgba(255,255,255,0.35)";
     ctx.beginPath(); ctx.ellipse(x - r * 0.2, y - r * 0.25, r * 0.3, r * 0.22, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+
+  // ---------- Background scenery ----------
+  function drawGodRays() {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const t = performance.now() / 4200;
+    for (let i = 0; i < 4; i++) {
+      const x = W * (0.12 + i * 0.24) + Math.sin(t + i * 1.7) * 50;
+      ctx.globalAlpha = 0.055;
+      ctx.fillStyle = "#8fd8ff";
+      ctx.beginPath();
+      ctx.moveTo(x - 26, 0); ctx.lineTo(x + 26, 0);
+      ctx.lineTo(x + 130, H); ctx.lineTo(x + 30, H);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawReef() {
+    // far silhouette
+    ctx.fillStyle = "rgba(4,44,60,0.5)";
+    ctx.beginPath(); ctx.moveTo(0, H);
+    const o1 = bgScroll * 0.3;
+    for (let x = 0; x <= W; x += 22) {
+      const y = H - 55 - Math.sin((x + o1) / 72) * 30 - Math.sin((x + o1) / 31) * 16;
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+    // near silhouette (darker)
+    ctx.fillStyle = "rgba(2,28,40,0.72)";
+    ctx.beginPath(); ctx.moveTo(0, H);
+    const o2 = bgScroll * 0.6;
+    for (let x = 0; x <= W; x += 22) {
+      const y = H - 22 - Math.sin((x + o2) / 48) * 22 - Math.sin((x + o2) / 19) * 11;
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+  }
+
+  function drawFishAll() {
+    for (const f of fish) {
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.scale(f.dir, 1);
+      ctx.globalAlpha = 0.82;
+      ctx.fillStyle = f.col;
+      ctx.beginPath(); ctx.ellipse(0, 0, f.sz, f.sz * 0.56, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-f.sz, 0); ctx.lineTo(-f.sz - f.sz * 0.7, -f.sz * 0.5); ctx.lineTo(-f.sz - f.sz * 0.7, f.sz * 0.5); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#0a1a22";
+      ctx.beginPath(); ctx.arc(f.sz * 0.5, -f.sz * 0.1, f.sz * 0.12, 0, 7); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawSeaweed() {
+    const t = performance.now() / 650;
+    ctx.lineCap = "round";
+    for (const w of weeds) {
+      let x = ((w.x - bgScroll * 0.5) % (W + 140) + (W + 140)) % (W + 140) - 70;
+      ctx.strokeStyle = "rgba(28,150,92,0.42)";
+      ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(x, H);
+      for (let i = 1; i <= w.seg; i++) {
+        const yy = H - (w.h / w.seg) * i;
+        const xx = x + Math.sin(t + w.ph + i * 0.5) * (i * 3.2);
+        ctx.lineTo(xx, yy);
+      }
+      ctx.stroke();
+    }
+    ctx.lineCap = "butt";
+  }
+
+  function drawBox(bx) {
+    ctx.save();
+    ctx.translate(bx.x, bx.y);
+    ctx.rotate(Math.sin(bx.spin) * 0.3);
+    ctx.shadowColor = "#ffd23a"; ctx.shadowBlur = 20;
+    const g = ctx.createLinearGradient(-bx.r, -bx.r, bx.r, bx.r);
+    g.addColorStop(0, "#ffe27a"); g.addColorStop(1, "#ff9e00");
+    ctx.fillStyle = g;
+    roundRect(-bx.r, -bx.r, bx.r * 2, bx.r * 2, 5); ctx.fill();
+    ctx.shadowBlur = 0;
+    // ribbon
+    ctx.strokeStyle = "rgba(255,255,255,0.75)"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, -bx.r); ctx.lineTo(0, bx.r); ctx.moveTo(-bx.r, 0); ctx.lineTo(bx.r, 0); ctx.stroke();
+    // question mark
+    ctx.fillStyle = "#7a3e00"; ctx.font = "700 18px 'Trebuchet MS', sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("?", 0, 1);
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
     ctx.restore();
   }
 
