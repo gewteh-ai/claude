@@ -86,6 +86,15 @@
   ];
   function levelForScore(s) { let l = 0; for (let i = 0; i < TIERS.length; i++) if (s >= TIERS[i].at) l = i; return l; }
 
+  // Depth biomes — the reef transforms as you swim deeper (top/bot are gradient RGBs, hue tints coral)
+  const BIOMES = [
+    { name: "CORAL REEF",           at: 0,   top: [12, 74, 96], bot: [2, 24, 38], hue: 150 },
+    { name: "KELP FOREST",          at: 70,  top: [10, 84, 66], bot: [2, 32, 26], hue: 110 },
+    { name: "DEEP TRENCH",          at: 200, top: [14, 40, 92], bot: [2, 8, 26],  hue: 205 },
+    { name: "BIOLUMINESCENT ABYSS", at: 380, top: [46, 14, 92], bot: [8, 2, 26],  hue: 285 },
+  ];
+  function biomeFor(s) { let b = 0; for (let i = 0; i < BIOMES.length; i++) if (s >= BIOMES[i].at) b = i; return b; }
+
   // ---------- Game state ----------
   const STATE = { MENU: 0, PLAY: 1, DEAD: 2 };
   let state = STATE.MENU;
@@ -95,6 +104,7 @@
   let combo, multiplier, maxCombo, pearlTimer, enemyTimer;
   let shield, shieldTimer, boost, boosting, invuln, slowmo, flash, jetCd;
   let boxes, boxTimer, fish, fishTimer, weeds, bgScroll;
+  let curBiome, bgTop, bgBot, mag, dbl;
   let lastTime = 0;
 
   function reset() {
@@ -122,6 +132,9 @@
     boxes = []; boxTimer = 6.5;
     fish = fish || []; fishTimer = 1.2;
     bgScroll = 0;
+    // biomes + power-ups
+    curBiome = 0; bgTop = BIOMES[0].top.slice(); bgBot = BIOMES[0].bot.slice();
+    mag = 0; dbl = 0;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -148,10 +161,12 @@
 
   // ---------- Obstacles ----------
   function spawnObstacle() {
-    const gap = Math.max(GAP_MIN, GAP_BASE - score * 2.2);
+    const gap = Math.max(GAP_MIN, GAP_BASE - Math.min(score, 90) * 0.85);
     const margin = 70;
     const gapY = margin + Math.random() * (H - gap - margin * 2);
-    obstacles.push({ x: W + 40, gapY, gap, w: 62, passed: false, hue: (score * 18) % 360 });
+    // moving gaps appear once you reach the trench (score >= 200)
+    const moveAmp = (score >= 200 && Math.random() < 0.5) ? (24 + Math.random() * 42) : 0;
+    obstacles.push({ x: W + 40, gapY, baseGapY: gapY, gap, w: 62, passed: false, hue: (score * 18) % 360, moveAmp, movePh: Math.random() * 6 });
   }
 
   // ---------- Particles ----------
@@ -278,7 +293,7 @@
   function addFloat(x, y, text, color) { floats.push({ x, y, text, color: color || "#fff", life: 1.1 }); }
 
   function addScore(amount, x, y, txt, color) {
-    score += amount;
+    score += (dbl > 0 ? amount * 2 : amount);
     if (txt) addFloat(x, y, txt, color);
   }
 
@@ -323,6 +338,8 @@
     { txt: "⭐ SCORE +50", act: () => { addScore(50, player.x, player.y - 20, "+50", "#ffe259"); } },
     { txt: "🐢 SLOW-MO BONUS", act: () => { slowmo = Math.max(slowmo, 1.3); addScore(5 * multiplier, player.x, player.y - 20, "+" + (5 * multiplier), "#ffe259"); } },
     { txt: "✨ COMBO x5!", act: () => { combo += 20; bumpMultiplier(); } },
+    { txt: "🧲 MAGNET 6s", act: () => { mag = Math.max(mag, 6); } },
+    { txt: "💰 DOUBLE SCORE 8s", act: () => { dbl = Math.max(dbl, 8); } },
   ];
   function openBox(bx) {
     bx.got = true;
@@ -406,6 +423,8 @@
     if (slowmo > 0) slowmo -= realDt;
     if (boosting > 0) { boosting -= realDt; if (boosting <= 0) { boosting = 0; jetCd = JET_COOLDOWN; } }
     if (jetCd > 0) jetCd -= realDt;
+    if (mag > 0) mag -= realDt;
+    if (dbl > 0) dbl -= realDt;
     if (state === STATE.PLAY && shield < SHIELD_MAX[curLevel]) {
       shieldTimer -= realDt;
       if (shieldTimer <= 0) {
@@ -442,6 +461,15 @@
     if (fishTimer <= 0) { spawnFish(); fishTimer = 0.7 + Math.random() * 1.6; }
     for (const f of fish) { f.x += f.dir * f.spd * realDt; f.y += Math.sin(elapsed * 2 + f.ph) * 8 * realDt; }
     fish = fish.filter(f => f.x > -60 && f.x < W + 60);
+
+    // biome progression + smooth colour transition
+    if (state === STATE.PLAY) {
+      const nb = biomeFor(score);
+      if (nb !== curBiome) { curBiome = nb; showBanner("🌊 " + BIOMES[nb].name); flash = Math.max(flash, 0.4); }
+    }
+    const tb = BIOMES[curBiome];
+    const bk = Math.min(1, realDt * 1.5);
+    for (let i = 0; i < 3; i++) { bgTop[i] += (tb.top[i] - bgTop[i]) * bk; bgBot[i] += (tb.bot[i] - bgBot[i]) * bk; }
 
     // floating score texts
     for (const f of floats) { f.y -= 42 * realDt; f.life -= realDt; }
@@ -481,6 +509,7 @@
       // obstacles
       for (const o of obstacles) {
         o.x -= speed * gdt;
+        if (o.moveAmp) o.gapY = Math.max(40, Math.min(H - o.gap - 40, o.baseGapY + Math.sin(elapsed * 1.4 + o.movePh) * o.moveAmp));
         // smash through during boost
         if (boosting > 0 && !o.smashed && hits(player, o)) {
           o.smashed = true; o.passed = true;
@@ -499,7 +528,7 @@
             beep(950, 0.12, "triangle", 0.05);
           }
           bumpMultiplier();
-          score += 1;
+          score += (dbl > 0 ? 2 : 1);
           burst(player.x + 20, player.y, "#ffd27a", 6, 100);
           beep(600 + score * 4, 0.06, "triangle", 0.035);
           const newLevel = levelForScore(score);
@@ -512,11 +541,13 @@
       // pearls
       for (const pr of pearls) {
         pr.x -= speed * gdt; pr.ph += realDt * 4;
-        // JET magnet: pull nearby pearls toward the prawn
-        if (boosting > 0 && !pr.got) {
+        // magnet: JET pulls hard, the magnet power-up pulls gently
+        if ((boosting > 0 || mag > 0) && !pr.got) {
+          const rad = boosting > 0 ? JET_MAGNET : 240;
+          const pull = boosting > 0 ? 640 : 380;
           const mdx = player.x - pr.x, mdy = player.y - pr.y;
           const md = Math.hypot(mdx, mdy) || 1;
-          if (md < JET_MAGNET) { pr.x += (mdx / md) * 640 * gdt; pr.y += (mdy / md) * 640 * gdt; }
+          if (md < rad) { pr.x += (mdx / md) * pull * gdt; pr.y += (mdy / md) * pull * gdt; }
         }
         const py = pr.y + Math.sin(pr.ph) * 4;
         const dx = pr.x - player.x, dy = py - player.y;
@@ -586,6 +617,13 @@
     ctx.clearRect(0, 0, W, H);
     ctx.save();
     if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+
+    // biome background gradient
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, `rgb(${bgTop[0] | 0},${bgTop[1] | 0},${bgTop[2] | 0})`);
+    bg.addColorStop(1, `rgb(${bgBot[0] | 0},${bgBot[1] | 0},${bgBot[2] | 0})`);
+    ctx.fillStyle = bg;
+    ctx.fillRect(-30, -30, W + 60, H + 60);
 
     // background layers
     drawGodRays();
@@ -680,6 +718,14 @@
     ctx.textAlign = "left";
 
     ctx.restore();
+
+    // active power-up indicators (top-left, screen-fixed)
+    if (state === STATE.PLAY && (mag > 0 || dbl > 0)) {
+      ctx.font = "700 18px 'Trebuchet MS', sans-serif"; ctx.textAlign = "left";
+      let iy = 92;
+      if (mag > 0) { ctx.fillStyle = "#8fe8ff"; ctx.fillText("🧲 " + Math.ceil(mag) + "s", 16, iy); iy += 26; }
+      if (dbl > 0) { ctx.fillStyle = "#ffe259"; ctx.fillText("💰 2× " + Math.ceil(dbl) + "s", 16, iy); }
+    }
 
     // full-screen flash (over everything, no shake offset)
     if (flash > 0) {
@@ -825,8 +871,8 @@
   }
 
   function drawObstacle(o) {
-    // glowing coral / kelp (greens with a little variation)
-    const col = `hsl(${150 + (o.hue % 50) - 25}, 78%, 56%)`;
+    // glowing coral tinted by the current biome
+    const col = `hsl(${BIOMES[curBiome].hue + (o.hue % 40) - 20}, 78%, 56%)`;
     ctx.save();
     ctx.shadowColor = col;
     ctx.shadowBlur = 20;
