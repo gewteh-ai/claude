@@ -111,6 +111,7 @@
   let curBiome, bgTop, bgBot, mag, dbl;
   let boss, bossNext, bossFirstDone;
   let lives, spd, firstBoxDone, ammo, shots;
+  let jellyOn, jellyT, jellyNext;
   let lastTime = 0;
 
   function reset() {
@@ -147,6 +148,8 @@
     // revive chances + speed power-up + harpoons
     lives = 2; spd = 0;
     ammo = 3; shots = [];
+    // zero-gravity jelly swarm stage
+    jellyOn = false; jellyT = 0; jellyNext = 90;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -471,6 +474,24 @@
     }
   }
 
+  // ---------- Jelly Swarm stage (no walls, no gravity) ----------
+  function enterJelly() {
+    jellyOn = true; jellyT = 14; jellyNext = Math.floor(score) + 220;
+    obstacles = [];                 // clear all coral — open water
+    ammo += 5;                      // harpoons for the swarm
+    if (boss.active && boss.phase === "chase") boss.phase = "retreat";
+    showBanner("🪼 JELLY SWARM!");
+    addFloat(player.x, player.y - 40, "+5 🔱  dodge & blast!", "#bff0ff");
+    flash = Math.max(flash, 0.4);
+    beep(300, 0.2, "sine", 0.06);
+  }
+  function exitJelly() {
+    jellyOn = false;
+    showBanner("✅ SWARM CLEARED!");
+    addScore(20, player.x, player.y - 30, "+20", "#8fffa0");
+    beep(760, 0.14, "triangle", 0.06);
+  }
+
   function alertShark() {
     if (!boss.active) { startBoss(); }
     else if (boss.phase === "chase") { boss.timer = Math.max(boss.timer, 10); }
@@ -642,8 +663,18 @@
     floats = floats.filter(f => f.life > 0);
 
     if (state === STATE.PLAY) {
+      // jelly swarm stage: trigger + countdown
+      if (!jellyOn && !boss.active && score >= jellyNext) enterJelly();
+      if (jellyOn) { jellyT -= realDt; if (jellyT <= 0) exitJelly(); }
+
       // player physics
-      if (boosting > 0) {
+      if (jellyOn && boosting <= 0) {
+        // zero-gravity swim: UP/DIVE move you, drag glides you to a stop; edges just clamp
+        player.vy *= 0.93;
+        player.y += player.vy * gdt;
+        player.y = Math.min(Math.max(player.y, PLAYER_R + 6), H - PLAYER_R - 6);
+        player.rot = Math.max(-0.5, Math.min(0.9, player.vy / 700));
+      } else if (boosting > 0) {
         // JET mode: gravity off, damped steering, stays on screen, exhaust trail
         player.vy *= 0.9;
         player.y += player.vy * gdt;
@@ -662,12 +693,12 @@
 
       // spawns (pearls come thick and fast during a JET so you sweep them up)
       spawnTimer -= gdt;
-      if (spawnTimer <= 0) { spawnObstacle(); spawnTimer = spawnInterval; }
+      if (spawnTimer <= 0) { if (!jellyOn) spawnObstacle(); spawnTimer = spawnInterval; }
       pearlTimer -= gdt;
       if (pearlTimer <= 0) { spawnPearl(); pearlTimer = boosting > 0 ? 0.32 : 0.9 + Math.random() * 0.9; }
-      if (elapsed > 6) {
+      if (jellyOn || elapsed > 6) {
         enemyTimer -= gdt;
-        if (enemyTimer <= 0) { spawnEnemy(); enemyTimer = 2.6 + Math.random() * 2.6; }
+        if (enemyTimer <= 0) { spawnEnemy(); enemyTimer = jellyOn ? (0.45 + Math.random() * 0.6) : (2.6 + Math.random() * 2.6); }
       }
       boxTimer -= gdt;
       if (boxTimer <= 0) { spawnBox(); boxTimer = 7 + Math.random() * 5; }
@@ -773,11 +804,11 @@
       shots = shots.filter(sh => !sh.dead && sh.x < W + 20);
       enemies = enemies.filter(en => !en.hit);
 
-      // boss predator chase
-      updateBoss(realDt, gdt);
+      // boss predator chase (paused during the jelly swarm)
+      if (!jellyOn) updateBoss(realDt, gdt);
 
-      // floor / ceiling
-      if (player.y + PLAYER_R > H || player.y - PLAYER_R < 0) takeHit("wall");
+      // floor / ceiling (in the jelly swarm the edges just clamp — no death)
+      if (!jellyOn && (player.y + PLAYER_R > H || player.y - PLAYER_R < 0)) takeHit("wall");
 
       updateHUD();
     }
@@ -938,6 +969,7 @@
       let iy = 40;
       ctx.fillStyle = "#ffd24d"; ctx.fillText("🛟 " + lives, 16, iy); iy += 26;
       ctx.fillStyle = "#bff0ff"; ctx.fillText("🔱 " + ammo, 16, iy); iy += 26;
+      if (jellyOn) { ctx.fillStyle = "#c9b0ff"; ctx.fillText("🪼 SWARM " + Math.ceil(jellyT) + "s", 16, iy); iy += 26; }
       if (mag > 0) { ctx.fillStyle = "#8fe8ff"; ctx.fillText("🧲 " + Math.ceil(mag) + "s", 16, iy); iy += 26; }
       if (dbl > 0) { ctx.fillStyle = "#ffe259"; ctx.fillText("💰 2× " + Math.ceil(dbl) + "s", 16, iy); iy += 26; }
       if (spd > 0) { ctx.fillStyle = "#8fffa0"; ctx.fillText("🌊 2× " + Math.ceil(spd) + "s", 16, iy); iy += 26; }
