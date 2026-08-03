@@ -138,7 +138,7 @@
     curBiome = 0; bgTop = BIOMES[0].top.slice(); bgBot = BIOMES[0].bot.slice();
     mag = 0; dbl = 0;
     // boss chase
-    boss = { active: false, x: -120, y: H * 0.5, phase: "", timer: 0, snap: 0 };
+    boss = { active: false, x: -120, y: H * 0.5, phase: "", timer: 0, snap: 0, lunge: 0 };
     bossNext = 55; bossFirstDone = false;
     // revive chances + speed power-up
     lives = 2; spd = 0;
@@ -177,11 +177,11 @@
   }
 
   // ---------- Particles ----------
-  function burst(x, y, color, count, spread) {
+  function burst(x, y, color, count, spread, big) {
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = Math.random() * spread + 40;
-      particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color, size: Math.random() * 3 + 1.5 });
+      particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color, size: big ? Math.random() * 7 + 3 : Math.random() * 3 + 1.5 });
     }
   }
 
@@ -421,7 +421,9 @@
     boss.y += Math.sign(dy) * Math.min(Math.abs(dy), 165 * realDt);
     if (boss.phase === "chase") {
       boss.timer -= realDt;
-      boss.x += (42 + elapsed * 0.45) * gdt;                // steady, less frantic pursuit
+      let creep = 42 + elapsed * 0.45;                      // steady base pursuit
+      if (boss.lunge > 0) { boss.lunge -= realDt; creep += 230; } // surge after a crash (outpaces the prawn)
+      boss.x += creep * gdt;
       if (spd > 0) boss.x -= 210 * gdt;                     // 2× SWIM easily pulls you away
       boss.x = Math.max(-160, Math.min(player.x + 6, boss.x));
       if (boss.x >= player.x - 18 && invuln <= 0 && boosting <= 0) { die(); return; }
@@ -440,7 +442,8 @@
 
   function alertShark() {
     if (!boss.active) { startBoss(); }
-    else if (boss.phase === "chase") { boss.x += 70; boss.timer = Math.max(boss.timer, 9); }
+    else if (boss.phase === "chase") { boss.timer = Math.max(boss.timer, 10); }
+    boss.x += 30; boss.lunge = 1.7;   // crashing sends the shark surging after you (faster than the prawn)
     addFloat(player.x, player.y - 52, "🦈 SHARK ALERTED!", "#ff6a6a");
   }
 
@@ -464,10 +467,17 @@
       lives--;
       invuln = 1.8; flash = Math.max(flash, 0.65); shake = Math.max(shake, 18);
       combo = 0; multiplier = 1;
-      burst(player.x, player.y, "#ff6a4a", 36, 320); // wall shatter
-      burst(player.x, player.y, "#ffffff", 20, 240);
-      beep(180, 0.28, "sawtooth", 0.09);
+      burst(player.x, player.y, "#ffffff", 22, 260);
+      beep(120, 0.3, "sawtooth", 0.1);      // crunch
       addFloat(player.x, player.y - 34, "REVIVE! " + lives + " left", "#ffd24d");
+      // shatter the coral we smashed into (chunky debris), then clear the lane
+      for (const o of obstacles) {
+        if (o.x < player.x + 150) {
+          const col = `hsl(${BIOMES[curBiome].hue + (o.hue % 40) - 20}, 78%, 56%)`;
+          burst(o.x + o.w / 2, o.gapY - 8, col, 16, 340, true);
+          burst(o.x + o.w / 2, o.gapY + o.gap + 8, col, 16, 340, true);
+        }
+      }
       obstacles = obstacles.filter(o => o.x > player.x + 150);
       enemies = enemies.filter(en => en.x > player.x + 150);
       player.y = H * 0.45; player.vy = FLAP_V * 0.5;
@@ -972,76 +982,15 @@
   }
 
   function drawShark(x, y, snap) {
-    const R = 46;
     ctx.save();
     ctx.translate(x, y);
-    ctx.shadowColor = "rgba(255,45,45,0.5)"; ctx.shadowBlur = 16;
-    const grd = ctx.createLinearGradient(0, -R, 0, R);
-    grd.addColorStop(0, "#5b6b78");
-    grd.addColorStop(0.5, "#37454e");
-    grd.addColorStop(1, "#1e282e");
-    ctx.fillStyle = grd;
-
-    // forked tail at the back (left)
-    ctx.beginPath();
-    ctx.moveTo(-R * 1.75, 0);
-    ctx.lineTo(-R * 2.7, -R * 0.95);
-    ctx.lineTo(-R * 2.05, -R * 0.05);
-    ctx.lineTo(-R * 2.6, R * 0.85);
-    ctx.closePath(); ctx.fill();
-
-    // smooth symmetric torpedo body, snout to the right
-    ctx.beginPath();
-    ctx.moveTo(R * 2.05, 0);
-    ctx.quadraticCurveTo(R * 0.3, -R * 0.6, -R * 1.8, -R * 0.14);
-    ctx.quadraticCurveTo(-R * 1.9, 0, -R * 1.8, R * 0.14);
-    ctx.quadraticCurveTo(R * 0.3, R * 0.6, R * 2.05, 0);
-    ctx.closePath(); ctx.fill();
-
-    // dorsal fin (top)
-    ctx.beginPath();
-    ctx.moveTo(-R * 0.05, -R * 0.5);
-    ctx.lineTo(R * 0.35, -R * 1.45);
-    ctx.lineTo(R * 0.62, -R * 0.46);
-    ctx.closePath(); ctx.fill();
-
-    // pectoral fin (lower front)
-    ctx.beginPath();
-    ctx.moveTo(R * 0.78, R * 0.34);
-    ctx.lineTo(R * 0.52, R * 1.1);
-    ctx.lineTo(R * 1.12, R * 0.4);
-    ctx.closePath(); ctx.fill();
-    ctx.shadowBlur = 0;
-
-    // pale belly
-    ctx.fillStyle = "rgba(210,220,225,0.22)";
-    ctx.beginPath();
-    ctx.moveTo(R * 1.9, 0);
-    ctx.quadraticCurveTo(R * 0.3, R * 0.5, -R * 1.5, R * 0.12);
-    ctx.quadraticCurveTo(R * 0.3, R * 0.34, R * 1.9, 0);
-    ctx.closePath(); ctx.fill();
-
-    // gills
-    ctx.strokeStyle = "rgba(10,16,20,0.6)"; ctx.lineWidth = 2;
-    for (let i = 0; i < 3; i++) { const gx = R * 0.72 - i * R * 0.15; ctx.beginPath(); ctx.moveTo(gx, -R * 0.26); ctx.quadraticCurveTo(gx - 4, 0, gx, R * 0.26); ctx.stroke(); }
-
-    // mouth line + teeth (under snout), gently snapping
-    const open = (Math.sin(snap) * 0.5 + 0.5) * R * 0.16 + R * 0.05;
-    ctx.strokeStyle = "#12060a"; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(R * 1.95, R * 0.06); ctx.quadraticCurveTo(R * 1.25, R * 0.26 + open, R * 0.7, R * 0.16); ctx.stroke();
-    ctx.fillStyle = "#ffffff";
-    for (let i = 0; i < 5; i++) {
-      const tx = R * 0.85 + i * R * 0.2;
-      const ty = R * 0.14 + open * 0.5;
-      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx + R * 0.05, ty + R * 0.11); ctx.lineTo(tx + R * 0.1, ty); ctx.closePath(); ctx.fill();
-    }
-
-    // fierce red eye
-    ctx.shadowColor = "#ff2a2a"; ctx.shadowBlur = 10;
-    ctx.fillStyle = "#ff2a2a";
-    ctx.beginPath(); ctx.arc(R * 1.25, -R * 0.2, R * 0.1, 0, 7); ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = "#140000"; ctx.beginPath(); ctx.arc(R * 1.27, -R * 0.2, R * 0.045, 0, 7); ctx.fill();
+    // gentle lunge scale with the snap timer
+    const s = 1 + Math.sin(snap) * 0.05;
+    ctx.scale(-s, s); // flip horizontally so the shark faces the prawn (to the right)
+    ctx.shadowColor = "rgba(255,40,40,0.8)"; ctx.shadowBlur = 26;
+    ctx.font = "94px serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("🦈", 0, 0);
     ctx.restore();
   }
 
