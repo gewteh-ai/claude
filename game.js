@@ -106,7 +106,7 @@
   let boxes, boxTimer, fish, fishTimer, weeds, bgScroll;
   let curBiome, bgTop, bgBot, mag, dbl;
   let boss, bossNext, bossFirstDone;
-  let lives, spd;
+  let lives, spd, firstBoxDone;
   let lastTime = 0;
 
   function reset() {
@@ -131,7 +131,7 @@
     shield = SHIELD_MAX[0]; shieldTimer = SHIELD_REGEN[0]; // begin with a cushion
     boost = 0; boosting = 0; invuln = 0; slowmo = 0; flash = 0; jetCd = 0;
     // mystery boxes + scenery
-    boxes = []; boxTimer = 6.5;
+    boxes = []; boxTimer = 2.5; firstBoxDone = false;
     fish = fish || []; fishTimer = 1.2;
     bgScroll = 0;
     // biomes + power-ups
@@ -377,13 +377,11 @@
   ];
   function openBox(bx) {
     bx.got = true;
-    // while the shark is hunting, boxes usually hand you the escape tool
+    const speedReward = { txt: "🌊 2× SWIM 5s", act: () => { spd = Math.max(spd, 5); } };
     let r;
-    if (boss.active && boss.phase === "chase" && Math.random() < 0.6) {
-      r = { txt: "🌊 2× SWIM 5s", act: () => { spd = Math.max(spd, 5); } };
-    } else {
-      r = BOX_REWARDS[Math.floor(Math.random() * BOX_REWARDS.length)];
-    }
+    if (!firstBoxDone) { firstBoxDone = true; r = speedReward; }         // early game: guaranteed 2X
+    else if (boss.active && boss.phase === "chase" && Math.random() < 0.6) { r = speedReward; }
+    else { r = BOX_REWARDS[Math.floor(Math.random() * BOX_REWARDS.length)]; }
     r.act();
     burst(bx.x, bx.y, "#ffe259", 26, 250);
     shake = Math.max(shake, 8); flash = Math.max(flash, 0.35);
@@ -420,11 +418,11 @@
     // CHASE: follow the prawn's height with a capped speed, so it trails/lags
     // behind and has to catch up (a real pursuit, not swimming in sync)
     const dy = player.y - boss.y;
-    boss.y += Math.sign(dy) * Math.min(Math.abs(dy), 210 * realDt);
+    boss.y += Math.sign(dy) * Math.min(Math.abs(dy), 165 * realDt);
     if (boss.phase === "chase") {
       boss.timer -= realDt;
-      boss.x += (78 + elapsed * 0.9) * gdt;                 // fierce, faster pursuit
-      if (spd > 0) boss.x -= 170 * gdt;                     // 2× SWIM lets you pull away
+      boss.x += (42 + elapsed * 0.45) * gdt;                // steady, less frantic pursuit
+      if (spd > 0) boss.x -= 210 * gdt;                     // 2× SWIM easily pulls you away
       boss.x = Math.max(-160, Math.min(player.x + 6, boss.x));
       if (boss.x >= player.x - 18 && invuln <= 0 && boosting <= 0) { die(); return; }
       if (boss.timer <= 0) {
@@ -974,67 +972,76 @@
   }
 
   function drawShark(x, y, snap) {
-    const R = 48;
+    const R = 46;
     ctx.save();
     ctx.translate(x, y);
-    // menacing red underglow
-    ctx.shadowColor = "#ff2a2a"; ctx.shadowBlur = 22;
+    ctx.shadowColor = "rgba(255,45,45,0.5)"; ctx.shadowBlur = 16;
     const grd = ctx.createLinearGradient(0, -R, 0, R);
-    grd.addColorStop(0, "#42525f"); grd.addColorStop(0.5, "#26333d"); grd.addColorStop(1, "#121a20");
+    grd.addColorStop(0, "#5b6b78");
+    grd.addColorStop(0.5, "#37454e");
+    grd.addColorStop(1, "#1e282e");
     ctx.fillStyle = grd;
-    // sleek torpedo body with a pointed snout (aerodynamic)
+
+    // forked tail at the back (left)
     ctx.beginPath();
-    ctx.moveTo(-R * 2.4, 0);
-    ctx.quadraticCurveTo(-R * 0.6, -R * 0.66, R * 0.9, -R * 0.4);
-    ctx.quadraticCurveTo(R * 1.75, -R * 0.2, R * 2.05, 0);
-    ctx.quadraticCurveTo(R * 1.75, R * 0.2, R * 0.9, R * 0.4);
-    ctx.quadraticCurveTo(-R * 0.6, R * 0.66, -R * 2.4, 0);
+    ctx.moveTo(-R * 1.75, 0);
+    ctx.lineTo(-R * 2.7, -R * 0.95);
+    ctx.lineTo(-R * 2.05, -R * 0.05);
+    ctx.lineTo(-R * 2.6, R * 0.85);
     ctx.closePath(); ctx.fill();
-    // swept crescent tail
+
+    // smooth symmetric torpedo body, snout to the right
     ctx.beginPath();
-    ctx.moveTo(-R * 2.2, 0);
-    ctx.lineTo(-R * 3.15, -R * 1.05);
-    ctx.quadraticCurveTo(-R * 2.5, -R * 0.25, -R * 2.5, 0);
-    ctx.quadraticCurveTo(-R * 2.5, R * 0.25, -R * 3.15, R * 1.05);
+    ctx.moveTo(R * 2.05, 0);
+    ctx.quadraticCurveTo(R * 0.3, -R * 0.6, -R * 1.8, -R * 0.14);
+    ctx.quadraticCurveTo(-R * 1.9, 0, -R * 1.8, R * 0.14);
+    ctx.quadraticCurveTo(R * 0.3, R * 0.6, R * 2.05, 0);
     ctx.closePath(); ctx.fill();
-    // tall swept-back dorsal fin
+
+    // dorsal fin (top)
     ctx.beginPath();
-    ctx.moveTo(-R * 0.35, -R * 0.5);
-    ctx.lineTo(R * 0.55, -R * 1.75);
-    ctx.lineTo(R * 0.72, -R * 0.42);
+    ctx.moveTo(-R * 0.05, -R * 0.5);
+    ctx.lineTo(R * 0.35, -R * 1.45);
+    ctx.lineTo(R * 0.62, -R * 0.46);
     ctx.closePath(); ctx.fill();
-    // swept pectoral fin
+
+    // pectoral fin (lower front)
     ctx.beginPath();
-    ctx.moveTo(R * 0.45, R * 0.32);
-    ctx.lineTo(R * 0.05, R * 1.3);
-    ctx.lineTo(R * 0.95, R * 0.45);
+    ctx.moveTo(R * 0.78, R * 0.34);
+    ctx.lineTo(R * 0.52, R * 1.1);
+    ctx.lineTo(R * 1.12, R * 0.4);
     ctx.closePath(); ctx.fill();
     ctx.shadowBlur = 0;
-    // gills
-    ctx.strokeStyle = "rgba(8,14,18,0.85)"; ctx.lineWidth = 2.4;
-    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(R * 0.55 - i * 9, -R * 0.28); ctx.lineTo(R * 0.48 - i * 9, R * 0.3); ctx.stroke(); }
+
     // pale belly
-    ctx.fillStyle = "rgba(205,214,220,0.22)";
-    ctx.beginPath(); ctx.ellipse(R * 0.15, R * 0.34, R * 1.15, R * 0.26, 0, 0, 7); ctx.fill();
-    // gaping snapping jaws
-    const open = (Math.sin(snap) * 0.5 + 0.5) * R * 0.5 + R * 0.12;
-    ctx.fillStyle = "#2a0509";
+    ctx.fillStyle = "rgba(210,220,225,0.22)";
     ctx.beginPath();
-    ctx.moveTo(R * 1.0, -open * 0.35); ctx.lineTo(R * 2.0, 0); ctx.lineTo(R * 1.0, open);
+    ctx.moveTo(R * 1.9, 0);
+    ctx.quadraticCurveTo(R * 0.3, R * 0.5, -R * 1.5, R * 0.12);
+    ctx.quadraticCurveTo(R * 0.3, R * 0.34, R * 1.9, 0);
     ctx.closePath(); ctx.fill();
-    // rows of sharp teeth
+
+    // gills
+    ctx.strokeStyle = "rgba(10,16,20,0.6)"; ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) { const gx = R * 0.72 - i * R * 0.15; ctx.beginPath(); ctx.moveTo(gx, -R * 0.26); ctx.quadraticCurveTo(gx - 4, 0, gx, R * 0.26); ctx.stroke(); }
+
+    // mouth line + teeth (under snout), gently snapping
+    const open = (Math.sin(snap) * 0.5 + 0.5) * R * 0.16 + R * 0.05;
+    ctx.strokeStyle = "#12060a"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(R * 1.95, R * 0.06); ctx.quadraticCurveTo(R * 1.25, R * 0.26 + open, R * 0.7, R * 0.16); ctx.stroke();
     ctx.fillStyle = "#ffffff";
     for (let i = 0; i < 5; i++) {
-      const tx = R * 1.02 + i * R * 0.2;
-      ctx.beginPath(); ctx.moveTo(tx, -open * 0.35); ctx.lineTo(tx + R * 0.06, -open * 0.35 + R * 0.2); ctx.lineTo(tx + R * 0.14, -open * 0.35); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(tx, open); ctx.lineTo(tx + R * 0.06, open - R * 0.2); ctx.lineTo(tx + R * 0.14, open); ctx.closePath(); ctx.fill();
+      const tx = R * 0.85 + i * R * 0.2;
+      const ty = R * 0.14 + open * 0.5;
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx + R * 0.05, ty + R * 0.11); ctx.lineTo(tx + R * 0.1, ty); ctx.closePath(); ctx.fill();
     }
-    // fierce glowing red eye
-    ctx.shadowColor = "#ff2a2a"; ctx.shadowBlur = 12;
+
+    // fierce red eye
+    ctx.shadowColor = "#ff2a2a"; ctx.shadowBlur = 10;
     ctx.fillStyle = "#ff2a2a";
-    ctx.beginPath(); ctx.arc(R * 0.85, -R * 0.26, R * 0.12, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(R * 1.25, -R * 0.2, R * 0.1, 0, 7); ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = "#160000"; ctx.beginPath(); ctx.arc(R * 0.88, -R * 0.26, R * 0.05, 0, 7); ctx.fill();
+    ctx.fillStyle = "#140000"; ctx.beginPath(); ctx.arc(R * 1.27, -R * 0.2, R * 0.045, 0, 7); ctx.fill();
     ctx.restore();
   }
 
