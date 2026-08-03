@@ -105,7 +105,7 @@
   let shield, shieldTimer, boost, boosting, invuln, slowmo, flash, jetCd;
   let boxes, boxTimer, fish, fishTimer, weeds, bgScroll;
   let curBiome, bgTop, bgBot, mag, dbl;
-  let boss, bossNext;
+  let boss, bossNext, bossFirstDone;
   let lastTime = 0;
 
   function reset() {
@@ -138,7 +138,7 @@
     mag = 0; dbl = 0;
     // boss chase
     boss = { active: false, x: -120, y: H * 0.5, phase: "", timer: 0, snap: 0 };
-    bossNext = 55;
+    bossNext = 55; bossFirstDone = false;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -201,6 +201,31 @@
     } catch (e) { /* ignore */ }
   }
 
+  // a tone with optional pitch glide (for dramatic stings)
+  function tone(freq, start, dur, type, vol, glideTo) {
+    if (!actx) return;
+    const o = actx.createOscillator(); const g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, start);
+    if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo, start + dur);
+    g.gain.setValueAtTime(vol, start); g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(start); o.stop(start + dur + 0.03);
+  }
+
+  // dramatic "dun-dun-dunnn + boom" game-over sting
+  function sfxGameOver() {
+    if (!store.sound) return;
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      const t = actx.currentTime;
+      tone(80, t, 0.85, "sine", 0.16);                  // deep impact boom
+      tone(392, t + 0.02, 0.22, "sawtooth", 0.10);      // dun
+      tone(311, t + 0.26, 0.22, "sawtooth", 0.10);      // dun
+      tone(233, t + 0.50, 0.65, "sawtooth", 0.12, 110); // dunnn (falling)
+      tone(55, t + 0.55, 1.0, "sine", 0.10);            // low rumble tail
+    } catch (e) { /* ignore */ }
+  }
+
   // ---------- Input ----------
   function flap() {
     if (state === STATE.MENU) { startGame(); return; }
@@ -239,9 +264,9 @@
   function die() {
     if (state !== STATE.PLAY) return;
     state = STATE.DEAD;
-    shake = 16;
-    burst(player.x, player.y, "#ff2fb9", 34, 260);
-    beep(150, 0.4, "sawtooth", 0.09);
+    shake = 20;
+    burst(player.x, player.y, "#ff2fb9", 40, 300);
+    sfxGameOver();
 
     const isBest = score > store.best;
     if (isBest) { store.best = score; localStorage.setItem("nd_best", score); }
@@ -368,13 +393,18 @@
   // ---------- Boss chase (predator shark) ----------
   function startBoss() {
     boss.active = true; boss.phase = "chase"; boss.x = -100; boss.y = player.y; boss.timer = 14; boss.snap = 0;
-    bossNext += 180;
+    bossFirstDone = true;
+    bossNext = Math.floor(score) + 180; // next encounter later on
     showBanner("⚠️ PREDATOR!");
     flash = Math.max(flash, 0.5); shake = Math.max(shake, 10);
     beep(90, 0.5, "sawtooth", 0.1);
   }
   function updateBoss(realDt, gdt) {
-    if (!boss.active) { if (score >= bossNext) startBoss(); return; }
+    if (!boss.active) {
+      // first shark strikes ~5s into the run; later ones by score
+      if ((!bossFirstDone && elapsed > 5) || score >= bossNext) startBoss();
+      return;
+    }
     boss.snap += realDt * 9;
     boss.y += (player.y - boss.y) * Math.min(1, realDt * 2.5);
     if (boss.phase === "chase") {
