@@ -114,7 +114,7 @@
   let lives, spd, firstBoxDone, ammo, shots;
   let jellyOn, jellyT, jellyNext, jellyEase;
   let sandOn, sandT, sandNext, onSand, rocks, rockTimer;
-  let beachOn, beachT, beachNext, beachObs, beachTimer;
+  let beachOn, beachT, beachNext, beachObs, beachTimer, beachRise;
   let lastTime = 0;
 
   function reset() {
@@ -156,7 +156,7 @@
     // seabed trek (ground runner)
     sandOn = false; sandT = 0; sandNext = 150; onSand = false; rocks = []; rockTimer = 1.0;
     // beach stage (above water, on the shore)
-    beachOn = false; beachT = 0; beachNext = 220; beachObs = []; beachTimer = 1.0;
+    beachOn = false; beachT = 0; beachNext = 220; beachObs = []; beachTimer = 1.0; beachRise = 0;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -542,13 +542,12 @@
 
   // ---------- Beach stage (breach up onto the shore) ----------
   function enterBeach() {
-    beachOn = true; beachT = 15; beachNext = Math.floor(score) + 260;
+    beachOn = true; beachT = 15; beachRise = 1.5; beachNext = Math.floor(score) + 260;
     obstacles = []; enemies = [];
     if (boss.active && boss.phase === "chase") boss.phase = "retreat";
-    player.vy = FLAP_V * 1.4;   // breach upward out of the water
-    showBanner("☀️ ON THE BEACH!");
-    addFloat(player.x, player.y - 40, "hop past the beachgoers!", "#ffe0a8");
-    flash = Math.max(flash, 0.5); beep(360, 0.2, "sine", 0.06);
+    showBanner("☀️ UP TO THE BEACH!");
+    addFloat(player.x, player.y - 40, "swimming up…", "#bfe6ff");
+    beep(300, 0.25, "sine", 0.06);
   }
   function exitBeach() {
     beachOn = false; jellyEase = EASE_TIME; slowmo = Math.max(slowmo, 1.8); invuln = Math.max(invuln, EASE_TIME + 0.6);
@@ -560,13 +559,13 @@
   }
   function spawnBeachObs() {
     const roll = Math.random();
-    if (roll < 0.3) {
+    if (roll < 0.38) {
       // seagull glides at height
       const r = 15 + Math.random() * 8;
       beachObs.push({ x: W + 40, r, fy: 70 + Math.random() * Math.max(50, sandTop() - 170), ph: Math.random() * 6, type: "gull", dead: false });
     } else {
-      const type = roll < 0.62 ? "human" : (roll < 0.82 ? "umbrella" : "castle");
-      const h = type === "umbrella" ? 96 : (type === "human" ? 76 : 46);
+      const type = roll < 0.72 ? "umbrella" : "castle";
+      const h = type === "umbrella" ? 96 : 46;
       beachObs.push({ x: W + 40, w: 42, h, type, tone: Math.random(), dead: false });
     }
   }
@@ -701,6 +700,7 @@
     if (dbl > 0) dbl -= realDt;
     if (spd > 0) spd -= realDt;
     if (jellyEase > 0) jellyEase -= realDt;
+    if (beachRise > 0) beachRise -= realDt;
     if (state === STATE.PLAY && shield < SHIELD_MAX[curLevel]) {
       shieldTimer -= realDt;
       if (shieldTimer <= 0) {
@@ -779,6 +779,13 @@
         player.y = Math.min(Math.max(player.y, 60), H - 60);
         player.rot = -0.22;
         if (Math.random() < 0.7) burst(player.x - 20, player.y + 3, "#ffd24d", 2, 70);
+      } else if (beachOn && beachRise > 0) {
+        // smooth ascent — the prawn swims up out of the water onto the shore
+        player.vy += (-820 - player.vy) * Math.min(1, gdt * 3);
+        player.y += player.vy * gdt;
+        player.y = Math.max(70, player.y);
+        player.rot = -0.3;
+        onSand = false;
       } else if (sandOn || beachOn) {
         // ground runner (seabed / beach): gravity pulls you down; UP hops
         player.vy += GRAVITY * gdt;
@@ -802,7 +809,7 @@
       spawnTimer -= gdt;
       if (spawnTimer <= 0) { if (!jellyOn && !sandOn && !beachOn && jellyEase <= 0) spawnObstacle(); spawnTimer = spawnInterval; }
       if (sandOn) { rockTimer -= gdt; if (rockTimer <= 0) { spawnRock(); rockTimer = 0.85 + Math.random() * 0.9; } }
-      if (beachOn) { beachTimer -= gdt; if (beachTimer <= 0) { spawnBeachObs(); beachTimer = 0.9 + Math.random() * 0.9; } }
+      if (beachOn && beachRise <= 0) { beachTimer -= gdt; if (beachTimer <= 0) { spawnBeachObs(); beachTimer = 0.9 + Math.random() * 0.9; } }
       pearlTimer -= gdt;
       if (pearlTimer <= 0) { spawnPearl(); pearlTimer = boosting > 0 ? 0.32 : 0.9 + Math.random() * 0.9; }
       if (!sandOn && !beachOn && (jellyOn || elapsed > 6)) {
@@ -975,15 +982,21 @@
     if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
 
     if (beachOn) {
-      // sky above the water
+      // underwater base stays visible while the prawn swims up, then the sky fades in
+      const bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, `rgb(${bgTop[0] | 0},${bgTop[1] | 0},${bgTop[2] | 0})`);
+      bg.addColorStop(1, `rgb(${bgBot[0] | 0},${bgBot[1] | 0},${bgBot[2] | 0})`);
+      ctx.fillStyle = bg; ctx.fillRect(-30, -30, W + 60, H + 60);
+      const skyA = beachRise > 0 ? Math.max(0, 1 - beachRise / 1.5) : 1;
+      ctx.save(); ctx.globalAlpha = skyA;
       const sky = ctx.createLinearGradient(0, 0, 0, H);
       sky.addColorStop(0, "#6fc4ff"); sky.addColorStop(0.55, "#bfe6ff"); sky.addColorStop(1, "#ffe9b0");
       ctx.fillStyle = sky; ctx.fillRect(-30, -30, W + 60, H + 60);
-      // sun + drifting clouds
       ctx.fillStyle = "rgba(255,244,170,0.95)"; ctx.beginPath(); ctx.arc(W * 0.82, H * 0.18, 42, 0, 7); ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       const cx = ((-bgScroll * 0.2) % (W + 240) + (W + 240)) % (W + 240) - 120;
       cloud(cx, H * 0.2); cloud(cx + 340, H * 0.3);
+      ctx.restore();
     } else {
       // biome background gradient
       const bg = ctx.createLinearGradient(0, 0, 0, H);
@@ -1005,9 +1018,8 @@
       ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill();
     }
 
-    // drifting fish + swaying seaweed
-    drawFishAll();
-    drawSeaweed();
+    // drifting fish + swaying seaweed (underwater only — hidden on the beach)
+    if (!beachOn) { drawFishAll(); drawSeaweed(); }
 
     // rising bubbles (underwater only)
     if (!beachOn) {
