@@ -735,6 +735,7 @@
     elapsed += gdt;
     speed = Math.min(SPEED_MAX, SPEED_BASE + elapsed * 6);
     speed *= viewScale;           // gentler on narrow phone screens
+    if (curBiome >= 2) speed *= 0.8;  // slower rhythm in the deep trench / abyss (moving gaps are tricky)
     if (boosting > 0) speed *= 1.55;
     if (spd > 0) speed *= 1.35;   // 2× SWIM power-up (faster = outrun the shark)
     if (jellyEase > 0) speed *= 0.5 + 0.5 * (1 - jellyEase / EASE_TIME); // ramp speed back up after a special stage
