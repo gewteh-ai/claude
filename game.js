@@ -456,7 +456,7 @@
 
   // ---------- Boss chase (predator shark) ----------
   function startBoss() {
-    boss.active = true; boss.phase = "chase"; boss.x = -100; boss.y = player.y; boss.timer = 14; boss.snap = 0;
+    boss.active = true; boss.phase = "chase"; boss.x = -140; boss.y = player.y; boss.timer = 11; boss.snap = 0;
     bossFirstDone = true;
     bossNext = Math.floor(score) + 180; // next encounter later on
     // drop a couple of 2× SWIM pickups so the player can grab one and outrun the shark
@@ -475,10 +475,10 @@
     boss.y += Math.sign(dy) * Math.min(Math.abs(dy), 165 * realDt);
     if (boss.phase === "chase") {
       boss.timer -= realDt;
-      let creep = 42 + elapsed * 0.45;                      // steady base pursuit
-      if (boss.lunge > 0) { boss.lunge -= realDt; creep += 230; } // surge after a crash (outpaces the prawn)
+      let creep = 34 + elapsed * 0.32;                      // gentler base pursuit
+      if (boss.lunge > 0) { boss.lunge -= realDt; creep += 150; } // brief surge after a crash
       boss.x += creep * gdt;
-      if (spd > 0) boss.x -= 210 * gdt;                     // 2× SWIM easily pulls you away
+      if (spd > 0) boss.x -= 230 * gdt;                     // 2× SWIM easily pulls you away
       boss.x = Math.max(-160, Math.min(player.x + 6, boss.x));
       if (boss.x >= player.x - 18 && invuln <= 0 && boosting <= 0) { die(); return; }
       if (boss.timer <= 0) {
@@ -621,8 +621,8 @@
 
   function alertShark() {
     if (!boss.active) { startBoss(); }
-    else if (boss.phase === "chase") { boss.timer = Math.max(boss.timer, 10); }
-    boss.x += 30; boss.lunge = 1.7;   // crashing sends the shark surging after you (faster than the prawn)
+    else if (boss.phase === "chase") { boss.timer = Math.max(boss.timer, 8); }
+    boss.x += 18; boss.lunge = 1.0;   // crashing gives the shark a brief surge
     addFloat(player.x, player.y - 52, "🦈 SHARK ALERTED!", "#ff6a6a");
   }
 
@@ -919,7 +919,7 @@
           beep(600 + score * 4, 0.06, "triangle", 0.035);
           const newLevel = levelForScore(score);
           if (newLevel > curLevel) { curLevel = newLevel; onLevelUp(TIERS[curLevel]); }
-          if (boss.active && boss.phase === "chase") boss.x -= 50; // outswim the predator
+          if (boss.active && boss.phase === "chase") boss.x -= 64; // outswim the predator
         }
         if (!o.smashed && boosting <= 0 && hits(player, o)) crashObstacle(o);
       }
@@ -945,7 +945,7 @@
           if (boosting <= 0) boost = Math.min(JET_NEED, boost + PEARL_FILL); // no recharge mid-JET
           burst(pr.x, py, "#7fe8ff", 10, 130);
           beep(1000 + combo * 8, 0.06, "sine", 0.05);
-          if (boss.active && boss.phase === "chase") boss.x -= 14;
+          if (boss.active && boss.phase === "chase") boss.x -= 20;
         }
       }
       pearls = pearls.filter(pr => !pr.got && pr.x > -20);
