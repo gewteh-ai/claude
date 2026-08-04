@@ -60,6 +60,7 @@
     pauseScreen: document.getElementById("pause-screen"),
   };
   let paused = false;
+  let holdUp = false, holdDown = false;
 
   // ---------- Persistent state ----------
   const store = {
@@ -454,6 +455,9 @@
     boss.active = true; boss.phase = "chase"; boss.x = -100; boss.y = player.y; boss.timer = 14; boss.snap = 0;
     bossFirstDone = true;
     bossNext = Math.floor(score) + 180; // next encounter later on
+    // drop a couple of 2× SWIM pickups so the player can grab one and outrun the shark
+    for (let i = 0; i < 2; i++) boxes.push({ x: W + 80 + i * 320, y: 120 + Math.random() * Math.max(80, H - 240), r: 18, spin: Math.random() * 6, got: false, pu: SPEED_PICKUP });
+    boxTimer = Math.min(boxTimer, 2.5);
     showBanner("⚠️ PREDATOR!");
     flash = Math.max(flash, 0.5); shake = Math.max(shake, 10);
     beep(90, 0.5, "sawtooth", 0.1);
@@ -793,8 +797,10 @@
         player.y = Math.min(Math.max(player.y, PLAYER_R + 6), H - PLAYER_R - 6);
         player.rot = Math.max(-0.5, Math.min(0.9, player.vy / 700));
       } else if (boosting > 0) {
-        // AQUAPOD: gravity off — you steer up/down with UP & DIVE (taps hold longer now)
-        player.vy *= 0.95;
+        // AQUAPOD: gravity off — HOLD ⬆ / ⬇ (or Up/Down keys) to steer up and down
+        if (holdUp) player.vy -= 1500 * gdt;
+        if (holdDown) player.vy += 1500 * gdt;
+        player.vy *= 0.9;
         player.y += player.vy * gdt;
         player.y = Math.min(Math.max(player.y, 56), H - 56);
         player.rot = Math.max(-0.4, Math.min(0.4, player.vy / 700));
@@ -1365,16 +1371,16 @@
 
   function drawUrchin(x, y, r) {
     ctx.save();
-    ctx.shadowColor = "#6a4fa0"; ctx.shadowBlur = 12;
-    ctx.strokeStyle = "#2a2140"; ctx.lineWidth = 3;
+    ctx.shadowColor = "#e05aff"; ctx.shadowBlur = 16;
+    ctx.strokeStyle = "#a83fff"; ctx.lineWidth = 3;
     for (let a = 0; a < 14; a++) {
       const ang = (a / 14) * Math.PI * 2;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(ang) * r * 1.5, y + Math.sin(ang) * r * 1.5); ctx.stroke();
     }
     ctx.shadowBlur = 0;
-    ctx.fillStyle = "#3a2d5c"; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
-    ctx.fillStyle = "#7a5fb0"; ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.25, r * 0.35, 0, 7); ctx.fill();
-    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.12, 0, 7); ctx.fill();
+    ctx.fillStyle = "#c05aff"; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    ctx.fillStyle = "#ec9bff"; ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.25, r * 0.4, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.14, 0, 7); ctx.fill();
     ctx.restore();
   }
 
@@ -1909,8 +1915,11 @@
   el.btnRevive.addEventListener("click", revive);
   el.btnBoost.addEventListener("click", doBoost);
   el.btnAttack.addEventListener("click", fireShot);
-  el.btnUp.addEventListener("pointerdown", (e) => { e.preventDefault(); flap(); });
-  el.btnDown.addEventListener("pointerdown", (e) => { e.preventDefault(); dive(); });
+  el.btnUp.addEventListener("pointerdown", (e) => { e.preventDefault(); holdUp = true; flap(); });
+  el.btnDown.addEventListener("pointerdown", (e) => { e.preventDefault(); holdDown = true; dive(); });
+  window.addEventListener("pointerup", () => { holdUp = false; holdDown = false; });
+  window.addEventListener("keydown", (e) => { if (e.code === "ArrowUp" || e.code === "Space") holdUp = true; else if (e.code === "ArrowDown") holdDown = true; });
+  window.addEventListener("keyup", (e) => { if (e.code === "ArrowUp" || e.code === "Space") holdUp = false; else if (e.code === "ArrowDown") holdDown = false; });
   el.btnPause.addEventListener("click", togglePause);
   el.btnResume.addEventListener("click", togglePause);
   window.addEventListener("keydown", (e) => {
