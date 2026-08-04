@@ -80,6 +80,7 @@
   const JET_MAGNET = 300;                     // px pearl-magnet radius during JET
   const JET_COOLDOWN = 1.6;                    // seconds after a JET before another can trigger
   const PEARL_FILL = 7;                        // meter gained per pearl (needs ~15 pearls per JET)
+  const EASE_TIME = 2.6;                       // gentle transition time back to open water after a special stage
   // Evolution tiers — a longer journey (drawX are hoisted fns)
   const TIERS = [
     { name: "PRAWN",     emoji: "🦐", at: 0,   draw: drawPrawn,   glow: "#ff9a4d" },
@@ -488,9 +489,10 @@
   }
   function exitJelly() {
     jellyOn = false;
-    jellyEase = 1.7;                       // gravity + walls ease back in gradually
-    slowmo = Math.max(slowmo, 1.2);
-    invuln = Math.max(invuln, 1.6);
+    jellyEase = EASE_TIME;                          // walls hold off + gravity ramps back
+    slowmo = Math.max(slowmo, 1.8);                 // longer slow-mo so you can re-orient
+    invuln = Math.max(invuln, EASE_TIME + 0.6);     // stay safe from wall bumps through the whole transition
+    player.vy = 0; player.y = Math.min(Math.max(player.y, 100), H - 100); // settle away from the edges
     showBanner("✅ SWARM CLEARED!");
     addScore(20, player.x, player.y - 30, "+20", "#8fffa0");
     beep(760, 0.14, "triangle", 0.06);
@@ -507,7 +509,8 @@
     flash = Math.max(flash, 0.4); beep(300, 0.2, "sine", 0.06);
   }
   function exitSand() {
-    sandOn = false; jellyEase = 1.7; slowmo = Math.max(slowmo, 1.2); invuln = Math.max(invuln, 1.6);
+    sandOn = false; jellyEase = EASE_TIME; slowmo = Math.max(slowmo, 1.8); invuln = Math.max(invuln, EASE_TIME + 0.6);
+    player.vy = 0; player.y = Math.min(Math.max(player.y, 100), H - 100);
     rocks = [];
     showBanner("🌊 BACK TO THE SEA!");
     addScore(20, player.x, player.y - 30, "+20", "#8fffa0");
@@ -673,6 +676,7 @@
     speed = Math.min(SPEED_MAX, SPEED_BASE + elapsed * 6);
     if (boosting > 0) speed *= 1.55;
     if (spd > 0) speed *= 1.35;   // 2× SWIM power-up (faster = outrun the shark)
+    if (jellyEase > 0) speed *= 0.5 + 0.5 * (1 - jellyEase / EASE_TIME); // ramp speed back up after a special stage
     const spawnInterval = Math.max(0.95, SPAWN_BASE - elapsed * 0.012);
 
     // parallax light specks
@@ -738,7 +742,7 @@
         if (player.y < 40) { player.y = 40; player.vy = 0; }
         player.rot = Math.max(-0.5, Math.min(0.6, player.vy / 900));
       } else {
-        const gf = jellyEase > 0 ? (1 - jellyEase / 1.7) : 1; // ease gravity back after a swarm
+        const gf = jellyEase > 0 ? (1 - jellyEase / EASE_TIME) : 1; // ease gravity back after a swarm
         player.vy += GRAVITY * gf * gdt;
         player.y += player.vy * gdt;
         player.rot = Math.max(-0.5, Math.min(1.1, player.vy / 700));
