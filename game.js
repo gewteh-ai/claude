@@ -123,7 +123,7 @@
   let jellyOn, jellyT, jellyNext, jellyEase;
   let sandOn, sandT, sandNext, onSand, rocks, rockTimer, sandEnter;
   let beachOn, beachT, beachNext, beachObs, beachTimer, beachRise, beachFall, beachEnding;
-  let deepOn, deepT, deepWarn, deepNext, lightR, anglers, blobs, angTimer, blobTimer;
+  let deepOn, deepT, deepWarn, deepNext, lightR, anglers, blobs, angTimer, blobTimer, motes;
   let lastTime = 0;
 
   function reset() {
@@ -167,7 +167,7 @@
     // beach stage (above water, on the shore)
     beachOn = false; beachT = 0; beachNext = 220; beachObs = []; beachTimer = 1.0; beachRise = 0; beachFall = 0; beachEnding = false;
     // midnight zone (dark deep scene)
-    deepOn = false; deepT = 0; deepWarn = 0; deepNext = 300; lightR = 110; anglers = []; blobs = []; angTimer = 1.2; blobTimer = 0.8;
+    deepOn = false; deepT = 0; deepWarn = 0; deepNext = 300; lightR = 110; anglers = []; blobs = []; angTimer = 1.2; blobTimer = 0.8; motes = [];
   }
 
   // ---------- Starfield (parallax) ----------
@@ -596,17 +596,22 @@
   function angY(a) { return a.baseY + Math.sin(elapsed * 1.5 + a.ph) * a.amp; }
   function enterDeep() {
     deepOn = true; deepWarn = 2.0; deepT = 16; deepNext = Math.floor(score) + 340;
-    obstacles = []; enemies = []; anglers = []; blobs = []; lightR = 110;
+    obstacles = []; enemies = []; anglers = []; blobs = []; lightR = 120;
+    // you're greeted by a friendly anglerfish first — it glides in ahead to light the way
+    anglers.push({ x: W * 0.66, baseY: player.y, amp: 12, ph: 0, r: 22, got: false });
+    // dreamy floating bioluminescent motes
+    motes = [];
+    for (let i = 0; i < 48; i++) motes.push({ x: Math.random() * W, y: Math.random() * H, vy: 5 + Math.random() * 14, ph: Math.random() * 6, r: 1.4 + Math.random() * 2.4 });
     if (boss.active && boss.phase === "chase") boss.phase = "retreat";
     slowmo = Math.max(slowmo, 1.0);
-    showBanner("⚠️ THE MIDNIGHT ZONE");
-    addFloat(player.x, player.y - 40, "find anglerfish to light the way…", "#8fe8ff");
-    beep(70, 0.6, "sawtooth", 0.09);
+    showBanner("✨ THE MIDNIGHT ZONE");
+    addFloat(player.x, player.y - 40, "meet the anglerfish… follow the light", "#bfe6ff");
+    beep(70, 0.6, "sine", 0.08);
   }
   function exitDeep() {
     deepOn = false; jellyEase = EASE_TIME; slowmo = Math.max(slowmo, 1.6); invuln = Math.max(invuln, EASE_TIME + 0.4);
     player.vy = 0; player.y = Math.min(Math.max(player.y, 120), H - 120);
-    anglers = []; blobs = [];
+    anglers = []; blobs = []; motes = [];
     showBanner("🌊 RISING UP!");
     addScore(30, player.x, player.y - 30, "+30", "#8fffa0");
   }
@@ -1032,6 +1037,7 @@
       anglers = anglers.filter(a => !a.got && a.x > -60);
       for (const b of blobs) b.x -= speed * 0.5 * gdt;
       blobs = blobs.filter(b => b.x > -60);
+      for (const m of motes) { m.y -= m.vy * realDt; m.ph += realDt; m.x += Math.sin(m.ph) * 8 * realDt; if (m.y < -6) { m.y = H + 6; m.x = Math.random() * W; } }
 
       // boss predator chase (paused during special stages)
       if (!jellyOn && !sandOn && !beachOn && !deepOn) updateBoss(realDt, gdt);
@@ -1220,15 +1226,25 @@
     // midnight-zone darkness with light holes around the prawn & anglerfish
     if (deepOn) {
       ensureDark();
-      const darkA = deepWarn > 0 ? Math.min(0.93, (2 - deepWarn) / 2 * 0.93) : 0.93;
+      const darkA = deepWarn > 0 ? Math.min(0.86, (2 - deepWarn) / 2 * 0.86) : 0.86;
       dctx.clearRect(0, 0, W, H);
-      dctx.fillStyle = "rgba(0,3,10," + darkA + ")";
+      dctx.fillStyle = "rgba(16,10,40," + darkA + ")";   // dreamy indigo, not pitch black
       dctx.fillRect(0, 0, W, H);
       dctx.globalCompositeOperation = "destination-out";
       darkHole(player.x, player.y, lightR);
       for (const a of anglers) darkHole(a.x, angY(a), 130);
       dctx.globalCompositeOperation = "source-over";
       ctx.drawImage(darkCanvas, 0, 0);
+      // dreamy glowing motes drift over the dark water
+      ctx.save(); ctx.globalCompositeOperation = "lighter";
+      for (const m of motes) {
+        const a = Math.max(0, 0.35 + Math.sin(m.ph * 2) * 0.28);
+        const g = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r * 4);
+        g.addColorStop(0, "rgba(170,230,255," + a + ")");
+        g.addColorStop(1, "rgba(170,230,255,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(m.x, m.y, m.r * 4, 0, 7); ctx.fill();
+      }
+      ctx.restore();
     }
 
     // danger vignette while the predator is closing in
@@ -1538,14 +1554,23 @@
     ctx.quadraticCurveTo(x - r * 1.1, y + r * 0.9, x - r, y);
     ctx.closePath(); ctx.fill();
     ctx.shadowBlur = 0;
-    // droopy nose
-    ctx.fillStyle = "#c97a9a"; ctx.beginPath(); ctx.ellipse(x, y + r * 0.28, r * 0.3, r * 0.36, 0, 0, 7); ctx.fill();
-    // sad eyes + frown
-    ctx.fillStyle = "#3a2030";
-    ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.08, r * 0.1, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(x + r * 0.35, y - r * 0.08, r * 0.1, 0, 7); ctx.fill();
-    ctx.strokeStyle = "#3a2030"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(x, y + r * 0.7, r * 0.32, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+    // big droopy nose
+    ctx.fillStyle = "#c97a9a"; ctx.beginPath(); ctx.ellipse(x, y + r * 0.34, r * 0.42, r * 0.48, 0, 0, 7); ctx.fill();
+    // big sad eyes (white + pupil)
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(x - r * 0.38, y - r * 0.12, r * 0.22, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.38, y - r * 0.12, r * 0.22, 0, 7); ctx.fill();
+    ctx.fillStyle = "#2a1620";
+    ctx.beginPath(); ctx.arc(x - r * 0.33, y - r * 0.05, r * 0.11, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.43, y - r * 0.05, r * 0.11, 0, 7); ctx.fill();
+    // droopy eyebrows
+    ctx.strokeStyle = "#8a5565"; ctx.lineWidth = 3; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x - r * 0.58, y - r * 0.36); ctx.lineTo(x - r * 0.18, y - r * 0.26); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + r * 0.58, y - r * 0.36); ctx.lineTo(x + r * 0.18, y - r * 0.26); ctx.stroke();
+    // big frown
+    ctx.strokeStyle = "#3a2030"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x, y + r * 0.9, r * 0.42, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+    ctx.lineCap = "butt";
     ctx.restore();
   }
 
