@@ -9,7 +9,7 @@
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
 
-  let W = 0, H = 0, DPR = 1;
+  let W = 0, H = 0, DPR = 1, viewScale = 1;
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 2);
     W = window.innerWidth;
@@ -19,6 +19,8 @@
     canvas.style.width = W + "px";
     canvas.style.height = H + "px";
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // narrower screens (phones) give less reaction time, so run a bit gentler
+    viewScale = Math.max(0.62, Math.min(1, W / 820));
     layoutStars();
     layoutScenery();
   }
@@ -53,7 +55,11 @@
     movePad: document.getElementById("move-pad"),
     btnUp: document.getElementById("btn-up"),
     btnDown: document.getElementById("btn-down"),
+    btnPause: document.getElementById("btn-pause"),
+    btnResume: document.getElementById("btn-resume"),
+    pauseScreen: document.getElementById("pause-screen"),
   };
+  let paused = false;
 
   // ---------- Persistent state ----------
   const store = {
@@ -86,8 +92,8 @@
     { name: "PRAWN",     emoji: "🦐", at: 0,   draw: drawPrawn,   glow: "#ff9a4d" },
     { name: "LOBSTER",   emoji: "🦞", at: 45,  draw: drawLobster, glow: "#ff4d4d" },
     { name: "CRAB",      emoji: "🦀", at: 120, draw: drawCrab,    glow: "#ff5ea8" },
-    { name: "KRAKEN",    emoji: "🐙", at: 250, draw: drawKraken,  glow: "#b06bff" },
-    { name: "LEVIATHAN", emoji: "🐋", at: 450, draw: drawWhale,   glow: "#4db8ff" },
+    { name: "KRAKEN",    emoji: "🐙", at: 340, draw: drawKraken,  glow: "#b06bff" },
+    { name: "LEVIATHAN", emoji: "🐋", at: 620, draw: drawWhale,   glow: "#4db8ff" },
   ];
   function levelForScore(s) { let l = 0; for (let i = 0; i < TIERS.length; i++) if (s >= TIERS[i].at) l = i; return l; }
 
@@ -246,6 +252,7 @@
 
   // ---------- Input ----------
   function flap() {
+    if (paused) return;
     if (state === STATE.MENU) { startGame(); return; }
     if (state === STATE.PLAY) {
       player.vy = FLAP_V; // tap any time to rise (on the seabed the sand still catches you)
@@ -255,6 +262,7 @@
   }
 
   function dive() {
+    if (paused) return;
     if (state === STATE.MENU) { startGame(); return; }
     if (state === STATE.PLAY) {
       player.vy = 470; // dart downward
@@ -299,6 +307,8 @@
     el.boostFill.style.width = "0%";
     el.btnAttack.classList.toggle("hidden", ammo <= 0);
     el.movePad.classList.remove("hidden");
+    paused = false; el.pauseScreen.classList.add("hidden");
+    el.btnPause.classList.remove("hidden"); el.btnPause.textContent = "⏸";
     lastTime = performance.now();
   }
 
@@ -324,6 +334,8 @@
       el.btnBoost.classList.add("hidden");
       el.btnAttack.classList.add("hidden");
       el.movePad.classList.add("hidden");
+      el.btnPause.classList.add("hidden");
+      paused = false; el.pauseScreen.classList.add("hidden");
       el.goScore.textContent = score;
       const reached = TIERS[levelForScore(score)];
       el.goCritter.textContent = `${reached.emoji} ${reached.name}`;
@@ -635,7 +647,7 @@
   }
 
   function doBoost() {
-    if (state !== STATE.PLAY || boost < JET_NEED || boosting > 0 || jetCd > 0) return;
+    if (paused || state !== STATE.PLAY || boost < JET_NEED || boosting > 0 || jetCd > 0) return;
     boost = 0;
     boosting = JET_TIME;
     invuln = JET_TIME + 0.4;
@@ -648,7 +660,7 @@
 
   // ---------- Harpoon (attack the jellyfish) ----------
   function fireShot() {
-    if (state !== STATE.PLAY || ammo <= 0) return;
+    if (paused || state !== STATE.PLAY || ammo <= 0) return;
     ammo--;
     shots.push({ x: player.x + PLAYER_R, y: player.y, vx: 640, dead: false });
     beep(880, 0.06, "square", 0.045);
@@ -715,6 +727,7 @@
 
     elapsed += gdt;
     speed = Math.min(SPEED_MAX, SPEED_BASE + elapsed * 6);
+    speed *= viewScale;           // gentler on narrow phone screens
     if (boosting > 0) speed *= 1.55;
     if (spd > 0) speed *= 1.35;   // 2× SWIM power-up (faster = outrun the shark)
     if (jellyEase > 0) speed *= 0.5 + 0.5 * (1 - jellyEase / EASE_TIME); // ramp speed back up after a special stage
@@ -777,11 +790,11 @@
         player.y = Math.min(Math.max(player.y, PLAYER_R + 6), H - PLAYER_R - 6);
         player.rot = Math.max(-0.5, Math.min(0.9, player.vy / 700));
       } else if (boosting > 0) {
-        // JET mode: gravity off, damped steering, stays on screen, exhaust trail
-        player.vy *= 0.9;
+        // AQUAPOD: gravity off — you steer up/down with UP & DIVE (taps hold longer now)
+        player.vy *= 0.95;
         player.y += player.vy * gdt;
-        player.y = Math.min(Math.max(player.y, 60), H - 60);
-        player.rot = -0.22;
+        player.y = Math.min(Math.max(player.y, 56), H - 56);
+        player.rot = Math.max(-0.4, Math.min(0.4, player.vy / 700));
         if (Math.random() < 0.7) burst(player.x - 20, player.y + 3, "#ffd24d", 2, 70);
       } else if (beachOn && beachRise > 0) {
         // smooth ascent — the prawn swims up out of the water onto the shore
@@ -1416,16 +1429,16 @@
     ctx.save();
     ctx.translate(x, y);
     ctx.shadowColor = "rgba(255,45,45,0.5)"; ctx.shadowBlur = 16;
-    const grd = ctx.createLinearGradient(0, -30, 0, 30);
+    const grd = ctx.createLinearGradient(0, -38, 0, 38);
     grd.addColorStop(0, "#5f6f7c"); grd.addColorStop(1, "#26333d");
     ctx.fillStyle = grd;
-    // curvy shark body: arched back, rounded belly, pointed snout on the right
+    // fat, curvy shark body: tall arched back, deep rounded belly, pointed snout
     ctx.beginPath();
-    ctx.moveTo(-56, -2);
-    ctx.bezierCurveTo(-32, -22, 18, -28, 52, -14);   // arched back toward the snout
-    ctx.quadraticCurveTo(86, -4, 86, 1);             // pointed snout tip
-    ctx.quadraticCurveTo(86, 7, 52, 15);             // under the chin
-    ctx.bezierCurveTo(14, 28, -32, 24, -56, 2);      // rounded belly back to the tail
+    ctx.moveTo(-58, -2);
+    ctx.bezierCurveTo(-30, -32, 18, -36, 52, -18);   // taller arched back
+    ctx.quadraticCurveTo(90, -5, 90, 1);             // pointed snout tip
+    ctx.quadraticCurveTo(90, 9, 52, 22);             // deep chin
+    ctx.bezierCurveTo(12, 38, -32, 32, -58, 2);      // fat rounded belly
     ctx.closePath(); ctx.fill();
     // forked tail that swishes vertically (left)
     const tw = Math.sin(snap * 2) * 7;
@@ -1832,10 +1845,16 @@
   function loop(now) {
     const dt = Math.min(0.033, (now - lastTime) / 1000) || 0;
     lastTime = now;
-    if (state === STATE.PLAY) update(dt);
-    else update(dt); // keep stars/particles moving on menus too
+    if (!paused) update(dt); // frozen while paused
     draw();
     requestAnimationFrame(loop);
+  }
+
+  function togglePause() {
+    if (state !== STATE.PLAY) return;
+    paused = !paused;
+    el.pauseScreen.classList.toggle("hidden", !paused);
+    el.btnPause.textContent = paused ? "▶" : "⏸";
   }
 
   // ---------- UI helpers ----------
@@ -1880,10 +1899,13 @@
   el.btnAttack.addEventListener("click", fireShot);
   el.btnUp.addEventListener("pointerdown", (e) => { e.preventDefault(); flap(); });
   el.btnDown.addEventListener("pointerdown", (e) => { e.preventDefault(); dive(); });
+  el.btnPause.addEventListener("click", togglePause);
+  el.btnResume.addEventListener("click", togglePause);
   window.addEventListener("keydown", (e) => {
     if (e.code === "KeyF") fireShot();
     else if (e.code === "KeyB") doBoost();
     else if (e.code === "ArrowDown") { dive(); e.preventDefault(); }
+    else if (e.code === "KeyP" || e.code === "Escape") { togglePause(); e.preventDefault(); }
   });
   // keyboard: B triggers boost
   window.addEventListener("keydown", (e) => { if (e.code === "KeyB") doBoost(); });

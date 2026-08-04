@@ -13,7 +13,7 @@
   <meta property="og:description" content="Swim the reef, grab pearls, open mystery boxes, and evolve from prawn to leviathan!" />
   <meta property="og:type" content="website" />
 
-  <link rel="stylesheet" href="style.css?v=30" />
+  <link rel="stylesheet" href="style.css?v=31" />
 </head>
 <body>
   <div id="game-wrap">
@@ -77,13 +77,20 @@
 
     <!-- Top-right controls -->
     <div class="top-controls">
+      <button class="icon-btn hidden" id="btn-pause" title="Pause">⏸</button>
       <button class="icon-btn" id="btn-sound" title="Sound">🔊</button>
+    </div>
+
+    <!-- Pause overlay -->
+    <div id="pause-screen" class="screen hidden">
+      <h2 class="go-title" style="color:var(--neon-cyan)">PAUSED</h2>
+      <button class="btn btn-primary" id="btn-resume">RESUME</button>
     </div>
 
     <!-- Share toast -->
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script src="game.js?v=30"></script>
+  <script src="game.js?v=31"></script>
 </body>
 </html>
