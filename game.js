@@ -245,8 +245,7 @@
   function flap() {
     if (state === STATE.MENU) { startGame(); return; }
     if (state === STATE.PLAY) {
-      if (sandOn && !onSand && boosting <= 0) return; // on the seabed you can only hop from the ground
-      player.vy = FLAP_V;
+      player.vy = FLAP_V; // tap any time to rise (on the seabed the sand still catches you)
       burst(player.x - 8, player.y + 6, "#9fe8ff", 6, 70); // splash bubbles
       beep(300, 0.1, "sine", 0.05); // bubble bloop
     }
