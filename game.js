@@ -119,7 +119,7 @@
   let boss, bossNext, bossFirstDone;
   let lives, spd, firstBoxDone, ammo, shots;
   let jellyOn, jellyT, jellyNext, jellyEase;
-  let sandOn, sandT, sandNext, onSand, rocks, rockTimer;
+  let sandOn, sandT, sandNext, onSand, rocks, rockTimer, sandEnter;
   let beachOn, beachT, beachNext, beachObs, beachTimer, beachRise, beachFall, beachEnding;
   let lastTime = 0;
 
@@ -160,7 +160,7 @@
     // zero-gravity jelly swarm stage
     jellyOn = false; jellyT = 0; jellyNext = 90; jellyEase = 0;
     // seabed trek (ground runner)
-    sandOn = false; sandT = 0; sandNext = 150; onSand = false; rocks = []; rockTimer = 1.0;
+    sandOn = false; sandT = 0; sandNext = 150; onSand = false; rocks = []; rockTimer = 1.0; sandEnter = 0;
     // beach stage (above water, on the shore)
     beachOn = false; beachT = 0; beachNext = 220; beachObs = []; beachTimer = 1.0; beachRise = 0; beachFall = 0; beachEnding = false;
   }
@@ -515,12 +515,13 @@
   // ---------- Seabed Trek stage (ground runner) ----------
   function sandTop() { return H - 96; }
   function enterSand() {
-    sandOn = true; sandT = 15; sandNext = Math.floor(score) + 240;
+    sandOn = true; sandT = 15; sandEnter = 1.1; sandNext = Math.floor(score) + 240;
     obstacles = []; enemies = [];
+    slowmo = Math.max(slowmo, 1.0);            // brief ease so the seabed fades in smoothly
     if (boss.active && boss.phase === "chase") boss.phase = "retreat";
     showBanner("🏖️ SEABED TREK!");
-    addFloat(player.x, player.y - 40, "hop the rocks! ⬆", "#ffe0a8");
-    flash = Math.max(flash, 0.4); beep(300, 0.2, "sine", 0.06);
+    addFloat(player.x, player.y - 40, "sinking down…", "#ffe0a8");
+    beep(300, 0.2, "sine", 0.06);
   }
   function exitSand() {
     sandOn = false; jellyEase = EASE_TIME; slowmo = Math.max(slowmo, 1.8); invuln = Math.max(invuln, EASE_TIME + 0.6);
@@ -556,6 +557,7 @@
   function enterBeach() {
     beachOn = true; beachT = 15; beachRise = 1.5; beachNext = Math.floor(score) + 260;
     obstacles = []; enemies = [];
+    slowmo = Math.max(slowmo, 1.0);
     if (boss.active && boss.phase === "chase") boss.phase = "retreat";
     showBanner("☀️ UP TO THE BEACH!");
     addFloat(player.x, player.y - 40, "swimming up…", "#bfe6ff");
@@ -571,12 +573,12 @@
   }
   function spawnBeachObs() {
     const roll = Math.random();
-    if (roll < 0.38) {
-      // seagull glides at height
+    if (roll < 0.58) {
+      // seagull swoops in to attack
       const r = 15 + Math.random() * 8;
       beachObs.push({ x: W + 40, r, fy: 70 + Math.random() * Math.max(50, sandTop() - 170), ph: Math.random() * 6, type: "gull", dead: false });
     } else {
-      const type = roll < 0.72 ? "umbrella" : "castle";
+      const type = roll < 0.8 ? "umbrella" : "castle";
       const h = type === "umbrella" ? 96 : 46;
       beachObs.push({ x: W + 40, w: 42, h, type, tone: Math.random(), dead: false });
     }
@@ -713,6 +715,7 @@
     if (spd > 0) spd -= realDt;
     if (jellyEase > 0) jellyEase -= realDt;
     if (beachRise > 0) beachRise -= realDt;
+    if (sandEnter > 0) sandEnter -= realDt;
     if (state === STATE.PLAY && shield < SHIELD_MAX[curLevel]) {
       shieldTimer -= realDt;
       if (shieldTimer <= 0) {
@@ -832,7 +835,7 @@
       // spawns (pearls come thick and fast during a JET so you sweep them up)
       spawnTimer -= gdt;
       if (spawnTimer <= 0) { if (!jellyOn && !sandOn && !beachOn && jellyEase <= 0) spawnObstacle(); spawnTimer = spawnInterval; }
-      if (sandOn) { rockTimer -= gdt; if (rockTimer <= 0) { spawnRock(); rockTimer = 0.85 + Math.random() * 0.9; } }
+      if (sandOn && sandEnter <= 0) { rockTimer -= gdt; if (rockTimer <= 0) { spawnRock(); rockTimer = 0.85 + Math.random() * 0.9; } }
       if (beachOn && beachRise <= 0 && !beachEnding) { beachTimer -= gdt; if (beachTimer <= 0) { spawnBeachObs(); beachTimer = 0.9 + Math.random() * 0.9; } }
       pearlTimer -= gdt;
       if (pearlTimer <= 0) { spawnPearl(); pearlTimer = boosting > 0 ? 0.32 : 0.9 + Math.random() * 0.9; }
@@ -962,6 +965,7 @@
       for (const o of beachObs) {
         o.x -= speed * gdt;
         if (o.fy != null) {
+          o.fy += Math.max(-1, Math.min(1, (player.y - o.fy) / 60)) * 55 * gdt; // seagull swoops toward the prawn
           const uy = o.fy + Math.sin(elapsed * 2 + o.ph) * 8;
           const dx = o.x - player.x, dy = uy - player.y;
           if (!o.dead && dx * dx + dy * dy < (o.r + PLAYER_R) * (o.r + PLAYER_R)) crashRock(o);
@@ -1059,10 +1063,18 @@
       }
     }
 
-    // seabed floor + rocks (during the trek)
-    if (sandOn) { drawSandFloor(); for (const rk of rocks) drawRock(rk); }
-    // beach floor + hazards (hidden during the dive-back so you see the water return)
-    if (beachOn && !beachEnding) { drawBeachFloor(); for (const o of beachObs) drawBeachObs(o); }
+    // seabed floor + rocks (fades in on entry for a smooth sink-down)
+    if (sandOn) {
+      ctx.globalAlpha = sandEnter > 0 ? Math.max(0, 1 - sandEnter / 1.1) : 1;
+      drawSandFloor(); ctx.globalAlpha = 1;
+      for (const rk of rocks) drawRock(rk);
+    }
+    // beach floor + hazards (fades in with the sky; hidden during the dive-back)
+    if (beachOn && !beachEnding) {
+      ctx.globalAlpha = beachRise > 0 ? Math.max(0, 1 - beachRise / 1.5) : 1;
+      drawBeachFloor(); for (const o of beachObs) drawBeachObs(o);
+      ctx.globalAlpha = 1;
+    }
 
     // pearls
     for (const pr of pearls) { drawPearl(pr.x, pr.y + Math.sin(pr.ph) * 4, pr.r); }
