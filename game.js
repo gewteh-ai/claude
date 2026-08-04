@@ -516,12 +516,20 @@
     beep(760, 0.14, "triangle", 0.06);
   }
   function spawnRock() {
-    const h = 32 + Math.random() * 40;
-    rocks.push({ x: W + 40, w: 42 + Math.random() * 30, h, type: Math.random() < 0.5 ? "rock" : "urchin", dead: false });
+    if (Math.random() < 0.5) {
+      const h = 32 + Math.random() * 40;
+      rocks.push({ x: W + 40, w: 42 + Math.random() * 30, h, type: "rock", dead: false });
+    } else {
+      // sea urchins float at varied heights above the seabed
+      const r = 18 + Math.random() * 14;
+      const fy = 80 + Math.random() * Math.max(60, sandTop() - 150);
+      rocks.push({ x: W + 40, r, fy, ph: Math.random() * 6, type: "urchin", dead: false });
+    }
   }
   function crashRock(rk) {
     if (invuln > 0 || boosting > 0) return;
-    burst(rk.x, sandTop() - rk.h / 2, "#caa46a", 16, 320, true);
+    const by = rk.type === "urchin" ? rk.fy : sandTop() - rk.h / 2;
+    burst(rk.x, by, rk.type === "urchin" ? "#7a5fb0" : "#caa46a", 16, 320, true);
     rk.dead = true; shake = Math.max(shake, 14); flash = Math.max(flash, 0.4);
     beep(120, 0.28, "sawtooth", 0.09); combo = 0; multiplier = 1;
     if (shield > 0) { shield--; invuln = 1.2; addFloat(player.x, player.y - 32, "SHIELD!", "#8fe8ff"); }
@@ -865,11 +873,17 @@
       shots = shots.filter(sh => !sh.dead && sh.x < W + 20);
       enemies = enemies.filter(en => !en.hit);
 
-      // seabed rocks (hop over them)
+      // seabed hazards: hop over rocks, dodge floating urchins
       for (const rk of rocks) {
         rk.x -= speed * gdt;
-        const top = sandTop() - rk.h;
-        if (!rk.dead && Math.abs(rk.x - player.x) < (rk.w / 2 + PLAYER_R) && player.y + PLAYER_R > top + 4) crashRock(rk);
+        if (rk.type === "urchin") {
+          const uy = rk.fy + Math.sin(elapsed * 2 + rk.ph) * 10;
+          const dx = rk.x - player.x, dy = uy - player.y;
+          if (!rk.dead && dx * dx + dy * dy < (rk.r + PLAYER_R) * (rk.r + PLAYER_R)) crashRock(rk);
+        } else {
+          const top = sandTop() - rk.h;
+          if (!rk.dead && Math.abs(rk.x - player.x) < (rk.w / 2 + PLAYER_R) && player.y + PLAYER_R > top + 4) crashRock(rk);
+        }
       }
       rocks = rocks.filter(rk => !rk.dead && rk.x > -60);
 
@@ -1213,28 +1227,37 @@
   }
 
   function drawRock(rk) {
-    const baseY = sandTop(), x = rk.x, h = rk.h, w = rk.w;
     if (rk.type === "urchin") {
-      const cy = baseY - h * 0.45;
-      ctx.strokeStyle = "#2a2140"; ctx.lineWidth = 3;
-      for (let a = 0; a < 12; a++) {
-        const ang = (a / 12) * Math.PI * 2;
-        ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x + Math.cos(ang) * (w * 0.62), cy + Math.sin(ang) * (w * 0.62)); ctx.stroke();
-      }
-      ctx.fillStyle = "#3a2d5c"; ctx.beginPath(); ctx.arc(x, cy, w * 0.42, 0, 7); ctx.fill();
-      ctx.fillStyle = "#7a5fb0"; ctx.beginPath(); ctx.arc(x - w * 0.1, cy - w * 0.1, w * 0.15, 0, 7); ctx.fill();
-    } else {
-      const g = ctx.createLinearGradient(x, baseY - h, x, baseY);
-      g.addColorStop(0, "#9298a0"); g.addColorStop(1, "#474d54");
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.moveTo(x - w / 2, baseY);
-      ctx.quadraticCurveTo(x - w / 2, baseY - h, x, baseY - h);
-      ctx.quadraticCurveTo(x + w / 2, baseY - h, x + w / 2, baseY);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.15)";
-      ctx.beginPath(); ctx.ellipse(x - w * 0.15, baseY - h * 0.6, w * 0.18, h * 0.18, 0, 0, 7); ctx.fill();
+      const uy = rk.fy + Math.sin(elapsed * 2 + rk.ph) * 10;
+      drawUrchin(rk.x, uy, rk.r);
+      return;
     }
+    const baseY = sandTop(), x = rk.x, h = rk.h, w = rk.w;
+    const g = ctx.createLinearGradient(x, baseY - h, x, baseY);
+    g.addColorStop(0, "#9298a0"); g.addColorStop(1, "#474d54");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(x - w / 2, baseY);
+    ctx.quadraticCurveTo(x - w / 2, baseY - h, x, baseY - h);
+    ctx.quadraticCurveTo(x + w / 2, baseY - h, x + w / 2, baseY);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    ctx.beginPath(); ctx.ellipse(x - w * 0.15, baseY - h * 0.6, w * 0.18, h * 0.18, 0, 0, 7); ctx.fill();
+  }
+
+  function drawUrchin(x, y, r) {
+    ctx.save();
+    ctx.shadowColor = "#6a4fa0"; ctx.shadowBlur = 12;
+    ctx.strokeStyle = "#2a2140"; ctx.lineWidth = 3;
+    for (let a = 0; a < 14; a++) {
+      const ang = (a / 14) * Math.PI * 2;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(ang) * r * 1.5, y + Math.sin(ang) * r * 1.5); ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#3a2d5c"; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    ctx.fillStyle = "#7a5fb0"; ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.25, r * 0.35, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.12, 0, 7); ctx.fill();
+    ctx.restore();
   }
 
   function drawShark(x, y, snap) {
