@@ -467,11 +467,7 @@
     beep(90, 0.5, "sawtooth", 0.1);
   }
   function updateBoss(realDt, gdt) {
-    if (!boss.active) {
-      // first shark strikes ~5s into the run; later ones by score
-      if ((!bossFirstDone && elapsed > 5) || score >= bossNext) startBoss();
-      return;
-    }
+    if (!boss.active) return; // the shark only shows up when you crash into something (see alertShark)
     boss.snap += realDt * 9;
     // CHASE: follow the prawn's height with a capped speed, so it trails/lags
     // behind and has to catch up (a real pursuit, not swimming in sync)
@@ -640,6 +636,7 @@
       burst(player.x, player.y, "#8fe8ff", 26, 230);
       beep(320, 0.18, "square", 0.06);
       addFloat(player.x, player.y - 32, "SHIELD!", "#8fe8ff");
+      alertShark();
       if (cause === "wall") { player.y = Math.min(Math.max(player.y, 90), H - 90); player.vy = 0; }
       else { player.vy = FLAP_V * 0.6; }
       return;
@@ -681,7 +678,7 @@
     shake = Math.max(shake, 16); flash = Math.max(flash, 0.45);
     beep(120, 0.3, "sawtooth", 0.1);
     combo = 0; multiplier = 1;
-    if (shield > 0) { shield--; invuln = 1.3; addFloat(player.x, player.y - 32, "SHIELD!", "#8fe8ff"); }
+    if (shield > 0) { shield--; invuln = 1.3; addFloat(player.x, player.y - 32, "SHIELD!", "#8fe8ff"); alertShark(); }
     else if (lives > 0) { lives--; invuln = 1.7; addFloat(player.x, player.y - 34, "REVIVE! " + lives + " left", "#ffd24d"); alertShark(); }
     else { die(); }
   }
@@ -868,6 +865,7 @@
         const gf = jellyEase > 0 ? (1 - jellyEase / EASE_TIME) : 1; // ease gravity back after a swarm
         player.vy += GRAVITY * gf * gdt;
         player.y += player.vy * gdt;
+        player.y = Math.min(Math.max(player.y, PLAYER_R), H - PLAYER_R); // never leave the screen
         player.rot = Math.max(-0.5, Math.min(1.1, player.vy / 700));
       }
 
@@ -1043,7 +1041,7 @@
       if (!jellyOn && !sandOn && !beachOn && !deepOn) updateBoss(realDt, gdt);
 
       // floor / ceiling (in the jelly swarm the edges just clamp — no death)
-      if (!jellyOn && !sandOn && !beachOn && !deepOn && jellyEase <= 0 && (player.y + PLAYER_R > H || player.y - PLAYER_R < 0)) takeHit("wall");
+      if (!jellyOn && !sandOn && !beachOn && !deepOn && jellyEase <= 0 && (player.y <= PLAYER_R || player.y >= H - PLAYER_R)) takeHit("wall");
 
       updateHUD();
     }
