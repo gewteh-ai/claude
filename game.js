@@ -92,10 +92,10 @@
   // Evolution tiers — a longer journey (drawX are hoisted fns)
   const TIERS = [
     { name: "PRAWN",     emoji: "🦐", at: 0,   draw: drawPrawn,   glow: "#ff9a4d" },
-    { name: "LOBSTER",   emoji: "🦞", at: 45,  draw: drawLobster, glow: "#ff4d4d" },
-    { name: "CRAB",      emoji: "🦀", at: 120, draw: drawCrab,    glow: "#ff5ea8" },
-    { name: "KRAKEN",    emoji: "🐙", at: 340, draw: drawKraken,  glow: "#b06bff" },
-    { name: "LEVIATHAN", emoji: "🐋", at: 620, draw: drawWhale,   glow: "#4db8ff" },
+    { name: "LOBSTER",   emoji: "🦞", at: 90,  draw: drawLobster, glow: "#ff4d4d" },
+    { name: "CRAB",      emoji: "🦀", at: 240, draw: drawCrab,    glow: "#ff5ea8" },
+    { name: "KRAKEN",    emoji: "🐙", at: 470, draw: drawKraken,  glow: "#b06bff" },
+    { name: "LEVIATHAN", emoji: "🐋", at: 820, draw: drawWhale,   glow: "#4db8ff" },
   ];
   function levelForScore(s) { let l = 0; for (let i = 0; i < TIERS.length; i++) if (s >= TIERS[i].at) l = i; return l; }
 
@@ -535,15 +535,16 @@
     addScore(20, player.x, player.y - 30, "+20", "#8fffa0");
     beep(760, 0.14, "triangle", 0.06);
   }
+  const URCHIN_COLS = ["#e05aff", "#c05aff", "#9a3fe0", "#6a2fb0", "#4a1f8a"]; // bright → dark purples
   function spawnRock() {
-    if (Math.random() < 0.5) {
+    if (Math.random() < 0.35) {
       const h = 32 + Math.random() * 40;
       rocks.push({ x: W + 40, w: 42 + Math.random() * 30, h, type: "rock", dead: false });
     } else {
-      // sea urchins float at varied heights above the seabed
+      // more sea urchins, floating at varied heights, in a mix of bright & dark purples
       const r = 18 + Math.random() * 14;
       const fy = 80 + Math.random() * Math.max(60, sandTop() - 150);
-      rocks.push({ x: W + 40, r, fy, ph: Math.random() * 6, type: "urchin", dead: false });
+      rocks.push({ x: W + 40, r, fy, ph: Math.random() * 6, type: "urchin", col: URCHIN_COLS[Math.floor(Math.random() * URCHIN_COLS.length)], dead: false });
     }
   }
   function crashRock(rk) {
@@ -1438,7 +1439,7 @@
   function drawRock(rk) {
     if (rk.type === "urchin") {
       const uy = rk.fy + Math.sin(elapsed * 2 + rk.ph) * 10;
-      drawUrchin(rk.x, uy, rk.r);
+      drawUrchin(rk.x, uy, rk.r, rk.col);
       return;
     }
     const baseY = sandTop(), x = rk.x, h = rk.h, w = rk.w;
@@ -1454,17 +1455,18 @@
     ctx.beginPath(); ctx.ellipse(x - w * 0.15, baseY - h * 0.6, w * 0.18, h * 0.18, 0, 0, 7); ctx.fill();
   }
 
-  function drawUrchin(x, y, r) {
+  function drawUrchin(x, y, r, col) {
+    col = col || "#c05aff";
     ctx.save();
-    ctx.shadowColor = "#e05aff"; ctx.shadowBlur = 16;
-    ctx.strokeStyle = "#a83fff"; ctx.lineWidth = 3;
+    ctx.shadowColor = col; ctx.shadowBlur = 16;
+    ctx.strokeStyle = col; ctx.lineWidth = 3;
     for (let a = 0; a < 14; a++) {
       const ang = (a / 14) * Math.PI * 2;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(ang) * r * 1.5, y + Math.sin(ang) * r * 1.5); ctx.stroke();
     }
     ctx.shadowBlur = 0;
-    ctx.fillStyle = "#c05aff"; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
-    ctx.fillStyle = "#ec9bff"; ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.25, r * 0.4, 0, 7); ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.45)"; ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.25, r * 0.4, 0, 7); ctx.fill();
     ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.14, 0, 7); ctx.fill();
     ctx.restore();
   }
