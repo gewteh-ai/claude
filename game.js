@@ -114,7 +114,7 @@
   let lives, spd, firstBoxDone, ammo, shots;
   let jellyOn, jellyT, jellyNext, jellyEase;
   let sandOn, sandT, sandNext, onSand, rocks, rockTimer;
-  let beachOn, beachT, beachNext, beachObs, beachTimer, beachRise;
+  let beachOn, beachT, beachNext, beachObs, beachTimer, beachRise, beachFall, beachEnding;
   let lastTime = 0;
 
   function reset() {
@@ -156,7 +156,7 @@
     // seabed trek (ground runner)
     sandOn = false; sandT = 0; sandNext = 150; onSand = false; rocks = []; rockTimer = 1.0;
     // beach stage (above water, on the shore)
-    beachOn = false; beachT = 0; beachNext = 220; beachObs = []; beachTimer = 1.0; beachRise = 0;
+    beachOn = false; beachT = 0; beachNext = 220; beachObs = []; beachTimer = 1.0; beachRise = 0; beachFall = 0; beachEnding = false;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -549,13 +549,13 @@
     addFloat(player.x, player.y - 40, "swimming up…", "#bfe6ff");
     beep(300, 0.25, "sine", 0.06);
   }
-  function exitBeach() {
-    beachOn = false; jellyEase = EASE_TIME; slowmo = Math.max(slowmo, 1.8); invuln = Math.max(invuln, EASE_TIME + 0.6);
-    player.vy = 0; player.y = Math.min(Math.max(player.y, 100), H - 100);
+  function finalizeBeach() {
+    beachOn = false; beachEnding = false; beachFall = 0;
+    jellyEase = EASE_TIME; slowmo = Math.max(slowmo, 1.6); invuln = Math.max(invuln, EASE_TIME + 0.4);
+    player.vy = 0; player.y = Math.min(Math.max(player.y, 120), H - 120);
     beachObs = [];
-    showBanner("🌊 BACK TO THE SEA!");
+    showBanner("🌊 BACK IN THE SEA!");
     addScore(20, player.x, player.y - 30, "+20", "#8fffa0");
-    beep(600, 0.14, "triangle", 0.06);
   }
   function spawnBeachObs() {
     const roll = Math.random();
@@ -763,7 +763,11 @@
       }
       if (jellyOn) { jellyT -= realDt; if (jellyT <= 0) exitJelly(); }
       if (sandOn) { sandT -= realDt; if (sandT <= 0) exitSand(); }
-      if (beachOn) { beachT -= realDt; if (beachT <= 0) exitBeach(); }
+      if (beachOn) {
+        beachT -= realDt;
+        if (beachT <= 0 && !beachEnding) { beachEnding = true; beachFall = 1.5; beachObs = []; invuln = Math.max(invuln, 2.2); showBanner("🌊 DIVING BACK…"); beep(240, 0.2, "sine", 0.05); }
+        if (beachEnding) { beachFall -= realDt; if (beachFall <= 0) finalizeBeach(); }
+      }
 
       // player physics
       if (jellyOn && boosting <= 0) {
@@ -785,6 +789,13 @@
         player.y += player.vy * gdt;
         player.y = Math.max(70, player.y);
         player.rot = -0.3;
+        onSand = false;
+      } else if (beachOn && beachEnding) {
+        // dive back down and sink into the sea (mirror of the swim-up)
+        player.vy += GRAVITY * 0.85 * gdt;
+        player.y += player.vy * gdt;
+        player.y = Math.min(player.y, H - 50);
+        player.rot = Math.min(0.9, player.vy / 700);
         onSand = false;
       } else if (sandOn || beachOn) {
         // ground runner (seabed / beach): gravity pulls you down; UP hops
@@ -809,7 +820,7 @@
       spawnTimer -= gdt;
       if (spawnTimer <= 0) { if (!jellyOn && !sandOn && !beachOn && jellyEase <= 0) spawnObstacle(); spawnTimer = spawnInterval; }
       if (sandOn) { rockTimer -= gdt; if (rockTimer <= 0) { spawnRock(); rockTimer = 0.85 + Math.random() * 0.9; } }
-      if (beachOn && beachRise <= 0) { beachTimer -= gdt; if (beachTimer <= 0) { spawnBeachObs(); beachTimer = 0.9 + Math.random() * 0.9; } }
+      if (beachOn && beachRise <= 0 && !beachEnding) { beachTimer -= gdt; if (beachTimer <= 0) { spawnBeachObs(); beachTimer = 0.9 + Math.random() * 0.9; } }
       pearlTimer -= gdt;
       if (pearlTimer <= 0) { spawnPearl(); pearlTimer = boosting > 0 ? 0.32 : 0.9 + Math.random() * 0.9; }
       if (!sandOn && !beachOn && (jellyOn || elapsed > 6)) {
@@ -987,7 +998,9 @@
       bg.addColorStop(0, `rgb(${bgTop[0] | 0},${bgTop[1] | 0},${bgTop[2] | 0})`);
       bg.addColorStop(1, `rgb(${bgBot[0] | 0},${bgBot[1] | 0},${bgBot[2] | 0})`);
       ctx.fillStyle = bg; ctx.fillRect(-30, -30, W + 60, H + 60);
-      const skyA = beachRise > 0 ? Math.max(0, 1 - beachRise / 1.5) : 1;
+      const skyA = beachRise > 0 ? Math.max(0, 1 - beachRise / 1.5)
+                 : beachEnding ? Math.max(0, beachFall / 1.5)
+                 : 1;
       ctx.save(); ctx.globalAlpha = skyA;
       const sky = ctx.createLinearGradient(0, 0, 0, H);
       sky.addColorStop(0, "#6fc4ff"); sky.addColorStop(0.55, "#bfe6ff"); sky.addColorStop(1, "#ffe9b0");
@@ -1035,8 +1048,8 @@
 
     // seabed floor + rocks (during the trek)
     if (sandOn) { drawSandFloor(); for (const rk of rocks) drawRock(rk); }
-    // beach floor + beachgoers (during the beach stage)
-    if (beachOn) { drawBeachFloor(); for (const o of beachObs) drawBeachObs(o); }
+    // beach floor + hazards (hidden during the dive-back so you see the water return)
+    if (beachOn && !beachEnding) { drawBeachFloor(); for (const o of beachObs) drawBeachObs(o); }
 
     // pearls
     for (const pr of pearls) { drawPearl(pr.x, pr.y + Math.sin(pr.ph) * 4, pr.r); }
@@ -1403,13 +1416,17 @@
     ctx.save();
     ctx.translate(x, y);
     ctx.shadowColor = "rgba(255,45,45,0.5)"; ctx.shadowBlur = 16;
-    const grd = ctx.createLinearGradient(0, -28, 0, 28);
+    const grd = ctx.createLinearGradient(0, -30, 0, 30);
     grd.addColorStop(0, "#5f6f7c"); grd.addColorStop(1, "#26333d");
     ctx.fillStyle = grd;
-    // dead-straight horizontal torpedo body
-    ctx.beginPath(); ctx.ellipse(0, 0, 60, 20, 0, 0, 7); ctx.fill();
-    // pointed snout (right, toward the prawn)
-    ctx.beginPath(); ctx.moveTo(54, -13); ctx.lineTo(82, 0); ctx.lineTo(54, 13); ctx.closePath(); ctx.fill();
+    // curvy shark body: arched back, rounded belly, pointed snout on the right
+    ctx.beginPath();
+    ctx.moveTo(-56, -2);
+    ctx.bezierCurveTo(-32, -22, 18, -28, 52, -14);   // arched back toward the snout
+    ctx.quadraticCurveTo(86, -4, 86, 1);             // pointed snout tip
+    ctx.quadraticCurveTo(86, 7, 52, 15);             // under the chin
+    ctx.bezierCurveTo(14, 28, -32, 24, -56, 2);      // rounded belly back to the tail
+    ctx.closePath(); ctx.fill();
     // forked tail that swishes vertically (left)
     const tw = Math.sin(snap * 2) * 7;
     ctx.beginPath(); ctx.moveTo(-54, 0); ctx.lineTo(-84, -26 + tw); ctx.lineTo(-68, 0); ctx.lineTo(-84, 26 + tw); ctx.closePath(); ctx.fill();
