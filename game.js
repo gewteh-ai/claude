@@ -114,6 +114,7 @@
   let lives, spd, firstBoxDone, ammo, shots;
   let jellyOn, jellyT, jellyNext, jellyEase;
   let sandOn, sandT, sandNext, onSand, rocks, rockTimer;
+  let beachOn, beachT, beachNext, beachObs, beachTimer;
   let lastTime = 0;
 
   function reset() {
@@ -154,6 +155,8 @@
     jellyOn = false; jellyT = 0; jellyNext = 90; jellyEase = 0;
     // seabed trek (ground runner)
     sandOn = false; sandT = 0; sandNext = 150; onSand = false; rocks = []; rockTimer = 1.0;
+    // beach stage (above water, on the shore)
+    beachOn = false; beachT = 0; beachNext = 220; beachObs = []; beachTimer = 1.0;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -528,13 +531,44 @@
   }
   function crashRock(rk) {
     if (invuln > 0 || boosting > 0) return;
-    const by = rk.type === "urchin" ? rk.fy : sandTop() - rk.h / 2;
-    burst(rk.x, by, rk.type === "urchin" ? "#7a5fb0" : "#caa46a", 16, 320, true);
+    const by = (rk.fy != null) ? rk.fy : sandTop() - rk.h / 2;
+    burst(rk.x, by, "#e0c090", 16, 320, true);
     rk.dead = true; shake = Math.max(shake, 14); flash = Math.max(flash, 0.4);
     beep(120, 0.28, "sawtooth", 0.09); combo = 0; multiplier = 1;
     if (shield > 0) { shield--; invuln = 1.2; addFloat(player.x, player.y - 32, "SHIELD!", "#8fe8ff"); }
     else if (lives > 0) { lives--; invuln = 1.6; addFloat(player.x, player.y - 34, "REVIVE! " + lives + " left", "#ffd24d"); }
     else die();
+  }
+
+  // ---------- Beach stage (breach up onto the shore) ----------
+  function enterBeach() {
+    beachOn = true; beachT = 15; beachNext = Math.floor(score) + 260;
+    obstacles = []; enemies = [];
+    if (boss.active && boss.phase === "chase") boss.phase = "retreat";
+    player.vy = FLAP_V * 1.4;   // breach upward out of the water
+    showBanner("☀️ ON THE BEACH!");
+    addFloat(player.x, player.y - 40, "hop past the beachgoers!", "#ffe0a8");
+    flash = Math.max(flash, 0.5); beep(360, 0.2, "sine", 0.06);
+  }
+  function exitBeach() {
+    beachOn = false; jellyEase = EASE_TIME; slowmo = Math.max(slowmo, 1.8); invuln = Math.max(invuln, EASE_TIME + 0.6);
+    player.vy = 0; player.y = Math.min(Math.max(player.y, 100), H - 100);
+    beachObs = [];
+    showBanner("🌊 BACK TO THE SEA!");
+    addScore(20, player.x, player.y - 30, "+20", "#8fffa0");
+    beep(600, 0.14, "triangle", 0.06);
+  }
+  function spawnBeachObs() {
+    const roll = Math.random();
+    if (roll < 0.3) {
+      // seagull glides at height
+      const r = 15 + Math.random() * 8;
+      beachObs.push({ x: W + 40, r, fy: 70 + Math.random() * Math.max(50, sandTop() - 170), ph: Math.random() * 6, type: "gull", dead: false });
+    } else {
+      const type = roll < 0.62 ? "human" : (roll < 0.82 ? "umbrella" : "castle");
+      const h = type === "umbrella" ? 96 : (type === "human" ? 76 : 46);
+      beachObs.push({ x: W + 40, w: 42, h, type, tone: Math.random(), dead: false });
+    }
   }
 
   function alertShark() {
@@ -721,10 +755,15 @@
 
     if (state === STATE.PLAY) {
       // special stages: trigger + countdown (only one at a time)
-      if (!jellyOn && !sandOn && !boss.active && jellyEase <= 0 && score >= jellyNext) enterJelly();
-      if (!sandOn && !jellyOn && !boss.active && jellyEase <= 0 && score >= sandNext) enterSand();
+      const anySpecial = jellyOn || sandOn || beachOn;
+      if (!anySpecial && !boss.active && jellyEase <= 0) {
+        if (score >= jellyNext) enterJelly();
+        else if (score >= sandNext) enterSand();
+        else if (score >= beachNext) enterBeach();
+      }
       if (jellyOn) { jellyT -= realDt; if (jellyT <= 0) exitJelly(); }
       if (sandOn) { sandT -= realDt; if (sandT <= 0) exitSand(); }
+      if (beachOn) { beachT -= realDt; if (beachT <= 0) exitBeach(); }
 
       // player physics
       if (jellyOn && boosting <= 0) {
@@ -740,8 +779,8 @@
         player.y = Math.min(Math.max(player.y, 60), H - 60);
         player.rot = -0.22;
         if (Math.random() < 0.7) burst(player.x - 20, player.y + 3, "#ffd24d", 2, 70);
-      } else if (sandOn) {
-        // seabed: gravity pulls you onto the sand; UP hops
+      } else if (sandOn || beachOn) {
+        // ground runner (seabed / beach): gravity pulls you down; UP hops
         player.vy += GRAVITY * gdt;
         player.y += player.vy * gdt;
         const floor = sandTop() - PLAYER_R;
@@ -761,11 +800,12 @@
 
       // spawns (pearls come thick and fast during a JET so you sweep them up)
       spawnTimer -= gdt;
-      if (spawnTimer <= 0) { if (!jellyOn && !sandOn && jellyEase <= 0) spawnObstacle(); spawnTimer = spawnInterval; }
+      if (spawnTimer <= 0) { if (!jellyOn && !sandOn && !beachOn && jellyEase <= 0) spawnObstacle(); spawnTimer = spawnInterval; }
       if (sandOn) { rockTimer -= gdt; if (rockTimer <= 0) { spawnRock(); rockTimer = 0.85 + Math.random() * 0.9; } }
+      if (beachOn) { beachTimer -= gdt; if (beachTimer <= 0) { spawnBeachObs(); beachTimer = 0.9 + Math.random() * 0.9; } }
       pearlTimer -= gdt;
       if (pearlTimer <= 0) { spawnPearl(); pearlTimer = boosting > 0 ? 0.32 : 0.9 + Math.random() * 0.9; }
-      if (!sandOn && (jellyOn || elapsed > 6)) {
+      if (!sandOn && !beachOn && (jellyOn || elapsed > 6)) {
         enemyTimer -= gdt;
         if (enemyTimer <= 0) { spawnEnemy(); enemyTimer = jellyOn ? (0.45 + Math.random() * 0.6) : (2.6 + Math.random() * 2.6); }
       }
@@ -887,11 +927,25 @@
       }
       rocks = rocks.filter(rk => !rk.dead && rk.x > -60);
 
+      // beach hazards: hop over beachgoers/umbrellas/castles, dodge gulls
+      for (const o of beachObs) {
+        o.x -= speed * gdt;
+        if (o.fy != null) {
+          const uy = o.fy + Math.sin(elapsed * 2 + o.ph) * 8;
+          const dx = o.x - player.x, dy = uy - player.y;
+          if (!o.dead && dx * dx + dy * dy < (o.r + PLAYER_R) * (o.r + PLAYER_R)) crashRock(o);
+        } else {
+          const top = sandTop() - o.h;
+          if (!o.dead && Math.abs(o.x - player.x) < (o.w / 2 + PLAYER_R) && player.y + PLAYER_R > top + 4) crashRock(o);
+        }
+      }
+      beachObs = beachObs.filter(o => !o.dead && o.x > -60);
+
       // boss predator chase (paused during special stages)
-      if (!jellyOn && !sandOn) updateBoss(realDt, gdt);
+      if (!jellyOn && !sandOn && !beachOn) updateBoss(realDt, gdt);
 
       // floor / ceiling (in the jelly swarm the edges just clamp — no death)
-      if (!jellyOn && !sandOn && jellyEase <= 0 && (player.y + PLAYER_R > H || player.y - PLAYER_R < 0)) takeHit("wall");
+      if (!jellyOn && !sandOn && !beachOn && jellyEase <= 0 && (player.y + PLAYER_R > H || player.y - PLAYER_R < 0)) takeHit("wall");
 
       updateHUD();
     }
@@ -920,16 +974,26 @@
     ctx.save();
     if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
 
-    // biome background gradient
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, `rgb(${bgTop[0] | 0},${bgTop[1] | 0},${bgTop[2] | 0})`);
-    bg.addColorStop(1, `rgb(${bgBot[0] | 0},${bgBot[1] | 0},${bgBot[2] | 0})`);
-    ctx.fillStyle = bg;
-    ctx.fillRect(-30, -30, W + 60, H + 60);
-
-    // background layers
-    drawGodRays();
-    drawReef();
+    if (beachOn) {
+      // sky above the water
+      const sky = ctx.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, "#6fc4ff"); sky.addColorStop(0.55, "#bfe6ff"); sky.addColorStop(1, "#ffe9b0");
+      ctx.fillStyle = sky; ctx.fillRect(-30, -30, W + 60, H + 60);
+      // sun + drifting clouds
+      ctx.fillStyle = "rgba(255,244,170,0.95)"; ctx.beginPath(); ctx.arc(W * 0.82, H * 0.18, 42, 0, 7); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      const cx = ((-bgScroll * 0.2) % (W + 240) + (W + 240)) % (W + 240) - 120;
+      cloud(cx, H * 0.2); cloud(cx + 340, H * 0.3);
+    } else {
+      // biome background gradient
+      const bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, `rgb(${bgTop[0] | 0},${bgTop[1] | 0},${bgTop[2] | 0})`);
+      bg.addColorStop(1, `rgb(${bgBot[0] | 0},${bgBot[1] | 0},${bgBot[2] | 0})`);
+      ctx.fillStyle = bg;
+      ctx.fillRect(-30, -30, W + 60, H + 60);
+      drawGodRays();
+      drawReef();
+    }
 
     // far stars
     ctx.fillStyle = "rgba(180,200,255,0.35)";
@@ -945,19 +1009,22 @@
     drawFishAll();
     drawSeaweed();
 
-    // rising bubbles
-    ctx.lineWidth = 1;
-    for (const b of bubbles) {
-      ctx.fillStyle = "rgba(140,225,255,0.08)";
-      ctx.strokeStyle = "rgba(150,230,255,0.28)";
-      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill(); ctx.stroke();
-      // little highlight
-      ctx.fillStyle = "rgba(220,250,255,0.5)";
-      ctx.beginPath(); ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.25, 0, 7); ctx.fill();
+    // rising bubbles (underwater only)
+    if (!beachOn) {
+      ctx.lineWidth = 1;
+      for (const b of bubbles) {
+        ctx.fillStyle = "rgba(140,225,255,0.08)";
+        ctx.strokeStyle = "rgba(150,230,255,0.28)";
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "rgba(220,250,255,0.5)";
+        ctx.beginPath(); ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.25, 0, 7); ctx.fill();
+      }
     }
 
     // seabed floor + rocks (during the trek)
     if (sandOn) { drawSandFloor(); for (const rk of rocks) drawRock(rk); }
+    // beach floor + beachgoers (during the beach stage)
+    if (beachOn) { drawBeachFloor(); for (const o of beachObs) drawBeachObs(o); }
 
     // pearls
     for (const pr of pearls) { drawPearl(pr.x, pr.y + Math.sin(pr.ph) * 4, pr.r); }
@@ -1057,6 +1124,7 @@
       ctx.fillStyle = "#bff0ff"; ctx.fillText("🔱 " + ammo, 16, iy); iy += 26;
       if (jellyOn) { ctx.fillStyle = "#c9b0ff"; ctx.fillText("🪼 SWARM " + Math.ceil(jellyT) + "s", 16, iy); iy += 26; }
       if (sandOn) { ctx.fillStyle = "#ffe0a8"; ctx.fillText("🏖️ TREK " + Math.ceil(sandT) + "s", 16, iy); iy += 26; }
+      if (beachOn) { ctx.fillStyle = "#ffd27a"; ctx.fillText("☀️ BEACH " + Math.ceil(beachT) + "s", 16, iy); iy += 26; }
       if (mag > 0) { ctx.fillStyle = "#8fe8ff"; ctx.fillText("🧲 " + Math.ceil(mag) + "s", 16, iy); iy += 26; }
       if (dbl > 0) { ctx.fillStyle = "#ffe259"; ctx.fillText("💰 2× " + Math.ceil(dbl) + "s", 16, iy); iy += 26; }
       if (spd > 0) { ctx.fillStyle = "#8fffa0"; ctx.fillText("🌊 2× " + Math.ceil(spd) + "s", 16, iy); iy += 26; }
@@ -1258,6 +1326,65 @@
     ctx.fillStyle = "#7a5fb0"; ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.25, r * 0.35, 0, 7); ctx.fill();
     ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.12, 0, 7); ctx.fill();
     ctx.restore();
+  }
+
+  function cloud(cx, cy) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, 24, 0, 7); ctx.arc(cx + 26, cy + 6, 20, 0, 7); ctx.arc(cx - 24, cy + 8, 18, 0, 7);
+    ctx.fill();
+  }
+
+  function drawBeachFloor() {
+    const top = sandTop();
+    const g = ctx.createLinearGradient(0, top, 0, H);
+    g.addColorStop(0, "#ffe6a8"); g.addColorStop(1, "#e0b96a");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, top);
+    const off = bgScroll * 0.6;
+    for (let x = 0; x <= W; x += 16) ctx.lineTo(x, top + Math.sin((x + off) / 45) * 4);
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(160,120,60,0.3)";
+    for (let i = 0; i < 30; i++) { const sx = ((i * 149 - bgScroll * 0.6) % W + W) % W; ctx.fillRect(sx, top + 16 + (i * 61) % (H - top - 24), 3, 3); }
+  }
+
+  function drawBeachObs(o) {
+    const baseY = sandTop();
+    if (o.type === "gull") {
+      const uy = o.fy + Math.sin(elapsed * 2 + o.ph) * 8;
+      const flap = Math.sin(elapsed * 6 + o.ph) * 6;
+      ctx.strokeStyle = "#eef2f5"; ctx.lineWidth = 4; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(o.x - o.r * 1.4, uy - flap); ctx.quadraticCurveTo(o.x, uy + 4, o.x + o.r * 1.4, uy - flap); ctx.stroke();
+      ctx.fillStyle = "#f2f5f7"; ctx.beginPath(); ctx.ellipse(o.x, uy + 2, o.r * 0.5, o.r * 0.35, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "#ffb400"; ctx.beginPath(); ctx.moveTo(o.x + o.r * 0.5, uy); ctx.lineTo(o.x + o.r * 0.95, uy + 2); ctx.lineTo(o.x + o.r * 0.5, uy + 5); ctx.closePath(); ctx.fill();
+      ctx.lineCap = "butt";
+      return;
+    }
+    const x = o.x, h = o.h, w = o.w, top = baseY - h;
+    if (o.type === "umbrella") {
+      ctx.strokeStyle = "#b5651d"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, top); ctx.stroke();
+      const cw = 60;
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = i % 2 ? "#ff5a5a" : "#ffffff";
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x - cw + i * (cw * 2 / 6), top + 20); ctx.lineTo(x - cw + (i + 1) * (cw * 2 / 6), top + 20); ctx.closePath(); ctx.fill();
+      }
+    } else if (o.type === "castle") {
+      ctx.fillStyle = "#e6b062"; ctx.fillRect(x - w / 2, top, w, h);
+      ctx.fillRect(x - w / 2, top - 8, 10, 8); ctx.fillRect(x - 5, top - 8, 10, 8); ctx.fillRect(x + w / 2 - 10, top - 8, 10, 8);
+      ctx.strokeStyle = "#7a4a10"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, top - 8); ctx.lineTo(x, top - 26); ctx.stroke();
+      ctx.fillStyle = "#ff5a5a"; ctx.beginPath(); ctx.moveTo(x, top - 26); ctx.lineTo(x + 14, top - 22); ctx.lineTo(x, top - 18); ctx.closePath(); ctx.fill();
+    } else {
+      // human beachgoer
+      const skin = o.tone < 0.5 ? "#e8b98a" : "#c98a5a";
+      const suit = o.tone < 0.33 ? "#ff5a8a" : (o.tone < 0.66 ? "#3aa0ff" : "#ffcf3a");
+      ctx.strokeStyle = skin; ctx.lineWidth = 6; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(x - 5, baseY); ctx.lineTo(x - 4, top + h * 0.45); ctx.moveTo(x + 5, baseY); ctx.lineTo(x + 4, top + h * 0.45); ctx.stroke();
+      ctx.fillStyle = suit; roundRect(x - 10, top + h * 0.28, 20, h * 0.3, 6); ctx.fill();
+      ctx.strokeStyle = skin; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(x - 9, top + h * 0.32); ctx.lineTo(x - 16, top + h * 0.5); ctx.moveTo(x + 9, top + h * 0.32); ctx.lineTo(x + 16, top + h * 0.5); ctx.stroke();
+      ctx.lineCap = "butt";
+      ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(x, top + h * 0.16, 11, 0, 7); ctx.fill();
+      ctx.fillStyle = "#3a2a1a"; ctx.beginPath(); ctx.arc(x, top + h * 0.13, 11, Math.PI, 0); ctx.fill();
+    }
   }
 
   function drawShark(x, y, snap) {
