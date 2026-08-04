@@ -112,6 +112,7 @@
   let boss, bossNext, bossFirstDone;
   let lives, spd, firstBoxDone, ammo, shots;
   let jellyOn, jellyT, jellyNext, jellyEase;
+  let sandOn, sandT, sandNext, onSand, rocks, rockTimer;
   let lastTime = 0;
 
   function reset() {
@@ -150,6 +151,8 @@
     ammo = 3; shots = [];
     // zero-gravity jelly swarm stage
     jellyOn = false; jellyT = 0; jellyNext = 90; jellyEase = 0;
+    // seabed trek (ground runner)
+    sandOn = false; sandT = 0; sandNext = 150; onSand = false; rocks = []; rockTimer = 1.0;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -241,6 +244,7 @@
   function flap() {
     if (state === STATE.MENU) { startGame(); return; }
     if (state === STATE.PLAY) {
+      if (sandOn && !onSand && boosting <= 0) return; // on the seabed you can only hop from the ground
       player.vy = FLAP_V;
       burst(player.x - 8, player.y + 6, "#9fe8ff", 6, 70); // splash bubbles
       beep(300, 0.1, "sine", 0.05); // bubble bloop
@@ -492,6 +496,37 @@
     beep(760, 0.14, "triangle", 0.06);
   }
 
+  // ---------- Seabed Trek stage (ground runner) ----------
+  function sandTop() { return H - 96; }
+  function enterSand() {
+    sandOn = true; sandT = 15; sandNext = Math.floor(score) + 240;
+    obstacles = []; enemies = [];
+    if (boss.active && boss.phase === "chase") boss.phase = "retreat";
+    showBanner("🏖️ SEABED TREK!");
+    addFloat(player.x, player.y - 40, "hop the rocks! ⬆", "#ffe0a8");
+    flash = Math.max(flash, 0.4); beep(300, 0.2, "sine", 0.06);
+  }
+  function exitSand() {
+    sandOn = false; jellyEase = 1.7; slowmo = Math.max(slowmo, 1.2); invuln = Math.max(invuln, 1.6);
+    rocks = [];
+    showBanner("🌊 BACK TO THE SEA!");
+    addScore(20, player.x, player.y - 30, "+20", "#8fffa0");
+    beep(760, 0.14, "triangle", 0.06);
+  }
+  function spawnRock() {
+    const h = 32 + Math.random() * 40;
+    rocks.push({ x: W + 40, w: 42 + Math.random() * 30, h, type: Math.random() < 0.5 ? "rock" : "urchin", dead: false });
+  }
+  function crashRock(rk) {
+    if (invuln > 0 || boosting > 0) return;
+    burst(rk.x, sandTop() - rk.h / 2, "#caa46a", 16, 320, true);
+    rk.dead = true; shake = Math.max(shake, 14); flash = Math.max(flash, 0.4);
+    beep(120, 0.28, "sawtooth", 0.09); combo = 0; multiplier = 1;
+    if (shield > 0) { shield--; invuln = 1.2; addFloat(player.x, player.y - 32, "SHIELD!", "#8fe8ff"); }
+    else if (lives > 0) { lives--; invuln = 1.6; addFloat(player.x, player.y - 34, "REVIVE! " + lives + " left", "#ffd24d"); }
+    else die();
+  }
+
   function alertShark() {
     if (!boss.active) { startBoss(); }
     else if (boss.phase === "chase") { boss.timer = Math.max(boss.timer, 10); }
@@ -674,9 +709,11 @@
     floats = floats.filter(f => f.life > 0);
 
     if (state === STATE.PLAY) {
-      // jelly swarm stage: trigger + countdown
-      if (!jellyOn && !boss.active && score >= jellyNext) enterJelly();
+      // special stages: trigger + countdown (only one at a time)
+      if (!jellyOn && !sandOn && !boss.active && jellyEase <= 0 && score >= jellyNext) enterJelly();
+      if (!sandOn && !jellyOn && !boss.active && jellyEase <= 0 && score >= sandNext) enterSand();
       if (jellyOn) { jellyT -= realDt; if (jellyT <= 0) exitJelly(); }
+      if (sandOn) { sandT -= realDt; if (sandT <= 0) exitSand(); }
 
       // player physics
       if (jellyOn && boosting <= 0) {
@@ -692,6 +729,14 @@
         player.y = Math.min(Math.max(player.y, 60), H - 60);
         player.rot = -0.22;
         if (Math.random() < 0.7) burst(player.x - 20, player.y + 3, "#ffd24d", 2, 70);
+      } else if (sandOn) {
+        // seabed: gravity pulls you onto the sand; UP hops
+        player.vy += GRAVITY * gdt;
+        player.y += player.vy * gdt;
+        const floor = sandTop() - PLAYER_R;
+        if (player.y >= floor) { player.y = floor; player.vy = 0; onSand = true; } else onSand = false;
+        if (player.y < 40) { player.y = 40; player.vy = 0; }
+        player.rot = Math.max(-0.5, Math.min(0.6, player.vy / 900));
       } else {
         const gf = jellyEase > 0 ? (1 - jellyEase / 1.7) : 1; // ease gravity back after a swarm
         player.vy += GRAVITY * gf * gdt;
@@ -705,10 +750,11 @@
 
       // spawns (pearls come thick and fast during a JET so you sweep them up)
       spawnTimer -= gdt;
-      if (spawnTimer <= 0) { if (!jellyOn && jellyEase <= 0) spawnObstacle(); spawnTimer = spawnInterval; }
+      if (spawnTimer <= 0) { if (!jellyOn && !sandOn && jellyEase <= 0) spawnObstacle(); spawnTimer = spawnInterval; }
+      if (sandOn) { rockTimer -= gdt; if (rockTimer <= 0) { spawnRock(); rockTimer = 0.85 + Math.random() * 0.9; } }
       pearlTimer -= gdt;
       if (pearlTimer <= 0) { spawnPearl(); pearlTimer = boosting > 0 ? 0.32 : 0.9 + Math.random() * 0.9; }
-      if (jellyOn || elapsed > 6) {
+      if (!sandOn && (jellyOn || elapsed > 6)) {
         enemyTimer -= gdt;
         if (enemyTimer <= 0) { spawnEnemy(); enemyTimer = jellyOn ? (0.45 + Math.random() * 0.6) : (2.6 + Math.random() * 2.6); }
       }
@@ -816,11 +862,19 @@
       shots = shots.filter(sh => !sh.dead && sh.x < W + 20);
       enemies = enemies.filter(en => !en.hit);
 
-      // boss predator chase (paused during the jelly swarm)
-      if (!jellyOn) updateBoss(realDt, gdt);
+      // seabed rocks (hop over them)
+      for (const rk of rocks) {
+        rk.x -= speed * gdt;
+        const top = sandTop() - rk.h;
+        if (!rk.dead && Math.abs(rk.x - player.x) < (rk.w / 2 + PLAYER_R) && player.y + PLAYER_R > top + 4) crashRock(rk);
+      }
+      rocks = rocks.filter(rk => !rk.dead && rk.x > -60);
+
+      // boss predator chase (paused during special stages)
+      if (!jellyOn && !sandOn) updateBoss(realDt, gdt);
 
       // floor / ceiling (in the jelly swarm the edges just clamp — no death)
-      if (!jellyOn && jellyEase <= 0 && (player.y + PLAYER_R > H || player.y - PLAYER_R < 0)) takeHit("wall");
+      if (!jellyOn && !sandOn && jellyEase <= 0 && (player.y + PLAYER_R > H || player.y - PLAYER_R < 0)) takeHit("wall");
 
       updateHUD();
     }
@@ -884,6 +938,9 @@
       ctx.fillStyle = "rgba(220,250,255,0.5)";
       ctx.beginPath(); ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.25, 0, 7); ctx.fill();
     }
+
+    // seabed floor + rocks (during the trek)
+    if (sandOn) { drawSandFloor(); for (const rk of rocks) drawRock(rk); }
 
     // pearls
     for (const pr of pearls) { drawPearl(pr.x, pr.y + Math.sin(pr.ph) * 4, pr.r); }
@@ -982,6 +1039,7 @@
       ctx.fillStyle = "#ffd24d"; ctx.fillText("🛟 " + lives, 16, iy); iy += 26;
       ctx.fillStyle = "#bff0ff"; ctx.fillText("🔱 " + ammo, 16, iy); iy += 26;
       if (jellyOn) { ctx.fillStyle = "#c9b0ff"; ctx.fillText("🪼 SWARM " + Math.ceil(jellyT) + "s", 16, iy); iy += 26; }
+      if (sandOn) { ctx.fillStyle = "#ffe0a8"; ctx.fillText("🏖️ TREK " + Math.ceil(sandT) + "s", 16, iy); iy += 26; }
       if (mag > 0) { ctx.fillStyle = "#8fe8ff"; ctx.fillText("🧲 " + Math.ceil(mag) + "s", 16, iy); iy += 26; }
       if (dbl > 0) { ctx.fillStyle = "#ffe259"; ctx.fillText("💰 2× " + Math.ceil(dbl) + "s", 16, iy); iy += 26; }
       if (spd > 0) { ctx.fillStyle = "#8fffa0"; ctx.fillText("🌊 2× " + Math.ceil(spd) + "s", 16, iy); iy += 26; }
@@ -1131,6 +1189,49 @@
       ctx.stroke();
     }
     ctx.lineCap = "butt";
+  }
+
+  function drawSandFloor() {
+    const top = sandTop();
+    const g = ctx.createLinearGradient(0, top, 0, H);
+    g.addColorStop(0, "#e8c98a"); g.addColorStop(1, "#b8935a");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(0, H); ctx.lineTo(0, top);
+    const off = bgScroll * 0.6;
+    for (let x = 0; x <= W; x += 16) ctx.lineTo(x, top + Math.sin((x + off) / 40) * 5);
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+    // speckles
+    ctx.fillStyle = "rgba(120,90,50,0.35)";
+    for (let i = 0; i < 34; i++) {
+      const sx = ((i * 137 - bgScroll * 0.6) % W + W) % W;
+      ctx.fillRect(sx, top + 16 + (i * 53) % (H - top - 24), 3, 3);
+    }
+  }
+
+  function drawRock(rk) {
+    const baseY = sandTop(), x = rk.x, h = rk.h, w = rk.w;
+    if (rk.type === "urchin") {
+      const cy = baseY - h * 0.45;
+      ctx.strokeStyle = "#2a2140"; ctx.lineWidth = 3;
+      for (let a = 0; a < 12; a++) {
+        const ang = (a / 12) * Math.PI * 2;
+        ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x + Math.cos(ang) * (w * 0.62), cy + Math.sin(ang) * (w * 0.62)); ctx.stroke();
+      }
+      ctx.fillStyle = "#3a2d5c"; ctx.beginPath(); ctx.arc(x, cy, w * 0.42, 0, 7); ctx.fill();
+      ctx.fillStyle = "#7a5fb0"; ctx.beginPath(); ctx.arc(x - w * 0.1, cy - w * 0.1, w * 0.15, 0, 7); ctx.fill();
+    } else {
+      const g = ctx.createLinearGradient(x, baseY - h, x, baseY);
+      g.addColorStop(0, "#9298a0"); g.addColorStop(1, "#474d54");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(x - w / 2, baseY);
+      ctx.quadraticCurveTo(x - w / 2, baseY - h, x, baseY - h);
+      ctx.quadraticCurveTo(x + w / 2, baseY - h, x + w / 2, baseY);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.15)";
+      ctx.beginPath(); ctx.ellipse(x - w * 0.15, baseY - h * 0.6, w * 0.18, h * 0.18, 0, 0, 7); ctx.fill();
+    }
   }
 
   function drawShark(x, y, snap) {
