@@ -111,7 +111,7 @@
   let curBiome, bgTop, bgBot, mag, dbl;
   let boss, bossNext, bossFirstDone;
   let lives, spd, firstBoxDone, ammo, shots;
-  let jellyOn, jellyT, jellyNext;
+  let jellyOn, jellyT, jellyNext, jellyEase;
   let lastTime = 0;
 
   function reset() {
@@ -149,7 +149,7 @@
     lives = 2; spd = 0;
     ammo = 3; shots = [];
     // zero-gravity jelly swarm stage
-    jellyOn = false; jellyT = 0; jellyNext = 90;
+    jellyOn = false; jellyT = 0; jellyNext = 90; jellyEase = 0;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -484,6 +484,9 @@
   }
   function exitJelly() {
     jellyOn = false;
+    jellyEase = 1.7;                       // gravity + walls ease back in gradually
+    slowmo = Math.max(slowmo, 1.2);
+    invuln = Math.max(invuln, 1.6);
     showBanner("✅ SWARM CLEARED!");
     addScore(20, player.x, player.y - 30, "+20", "#8fffa0");
     beep(760, 0.14, "triangle", 0.06);
@@ -560,7 +563,7 @@
     invuln = JET_TIME + 0.4;
     flash = Math.max(flash, 0.55);
     shake = Math.max(shake, 10);
-    addFloat(player.x, player.y - 34, "🚀 JET!", "#ffe259");
+    showBanner("🚀 AQUAPOD!");
     beep(180, 0.3, "sawtooth", 0.07);
     setTimeout(() => beep(300, 0.2, "sawtooth", 0.05), 120);
   }
@@ -618,6 +621,7 @@
     if (mag > 0) mag -= realDt;
     if (dbl > 0) dbl -= realDt;
     if (spd > 0) spd -= realDt;
+    if (jellyEase > 0) jellyEase -= realDt;
     if (state === STATE.PLAY && shield < SHIELD_MAX[curLevel]) {
       shieldTimer -= realDt;
       if (shieldTimer <= 0) {
@@ -689,7 +693,8 @@
         player.rot = -0.22;
         if (Math.random() < 0.7) burst(player.x - 20, player.y + 3, "#ffd24d", 2, 70);
       } else {
-        player.vy += GRAVITY * gdt;
+        const gf = jellyEase > 0 ? (1 - jellyEase / 1.7) : 1; // ease gravity back after a swarm
+        player.vy += GRAVITY * gf * gdt;
         player.y += player.vy * gdt;
         player.rot = Math.max(-0.5, Math.min(1.1, player.vy / 700));
       }
@@ -700,7 +705,7 @@
 
       // spawns (pearls come thick and fast during a JET so you sweep them up)
       spawnTimer -= gdt;
-      if (spawnTimer <= 0) { if (!jellyOn) spawnObstacle(); spawnTimer = spawnInterval; }
+      if (spawnTimer <= 0) { if (!jellyOn && jellyEase <= 0) spawnObstacle(); spawnTimer = spawnInterval; }
       pearlTimer -= gdt;
       if (pearlTimer <= 0) { spawnPearl(); pearlTimer = boosting > 0 ? 0.32 : 0.9 + Math.random() * 0.9; }
       if (jellyOn || elapsed > 6) {
@@ -815,7 +820,7 @@
       if (!jellyOn) updateBoss(realDt, gdt);
 
       // floor / ceiling (in the jelly swarm the edges just clamp — no death)
-      if (!jellyOn && (player.y + PLAYER_R > H || player.y - PLAYER_R < 0)) takeHit("wall");
+      if (!jellyOn && jellyEase <= 0 && (player.y + PLAYER_R > H || player.y - PLAYER_R < 0)) takeHit("wall");
 
       updateHUD();
     }
@@ -1131,17 +1136,38 @@
   function drawShark(x, y, snap) {
     ctx.save();
     ctx.translate(x, y);
-    // swim wake — trailing bubbles behind convey motion without bending the body
-    for (let i = 1; i <= 3; i++) {
-      const a = Math.max(0, 0.2 / i + Math.sin(snap * 2 - i) * 0.06);
-      ctx.fillStyle = "rgba(180,220,255," + a + ")";
-      ctx.beginPath(); ctx.arc(-48 - i * 15, Math.sin(snap * 2 - i) * 6, 6 - i, 0, 7); ctx.fill();
-    }
-    // straight, horizontal body facing right (head-to-tail level, no tilt)
-    ctx.shadowColor = "rgba(255,40,40,0.8)"; ctx.shadowBlur = 26;
-    ctx.font = "92px serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.save(); ctx.scale(-1, 1); ctx.fillText("🦈", 0, 0); ctx.restore();
+    ctx.shadowColor = "rgba(255,45,45,0.5)"; ctx.shadowBlur = 16;
+    const grd = ctx.createLinearGradient(0, -28, 0, 28);
+    grd.addColorStop(0, "#5f6f7c"); grd.addColorStop(1, "#26333d");
+    ctx.fillStyle = grd;
+    // dead-straight horizontal torpedo body
+    ctx.beginPath(); ctx.ellipse(0, 0, 60, 20, 0, 0, 7); ctx.fill();
+    // pointed snout (right, toward the prawn)
+    ctx.beginPath(); ctx.moveTo(54, -13); ctx.lineTo(82, 0); ctx.lineTo(54, 13); ctx.closePath(); ctx.fill();
+    // forked tail that swishes vertically (left)
+    const tw = Math.sin(snap * 2) * 7;
+    ctx.beginPath(); ctx.moveTo(-54, 0); ctx.lineTo(-84, -26 + tw); ctx.lineTo(-68, 0); ctx.lineTo(-84, 26 + tw); ctx.closePath(); ctx.fill();
+    // dorsal fin (top)
+    ctx.beginPath(); ctx.moveTo(-8, -18); ctx.lineTo(10, -46); ctx.lineTo(26, -16); ctx.closePath(); ctx.fill();
+    // pectoral fin (bottom)
+    ctx.beginPath(); ctx.moveTo(14, 15); ctx.lineTo(4, 40); ctx.lineTo(36, 17); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    // pale belly stripe
+    ctx.fillStyle = "rgba(212,222,227,0.28)";
+    ctx.beginPath(); ctx.ellipse(6, 9, 48, 9, 0, 0, 7); ctx.fill();
+    // gills
+    ctx.strokeStyle = "rgba(10,16,20,0.6)"; ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(36 - i * 7, -10); ctx.lineTo(33 - i * 7, 10); ctx.stroke(); }
+    // mouth + teeth (snapping)
+    const open = (Math.sin(snap) * 0.5 + 0.5) * 6 + 3;
+    ctx.strokeStyle = "#12060a"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(78, 5); ctx.quadraticCurveTo(54, 13 + open, 36, 9); ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < 4; i++) { const tx = 42 + i * 8, ty = 9 + open * 0.4; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx + 4, ty + 7); ctx.lineTo(tx + 8, ty); ctx.closePath(); ctx.fill(); }
+    // fierce red eye
+    ctx.shadowColor = "#ff2a2a"; ctx.shadowBlur = 10; ctx.fillStyle = "#ff2a2a";
+    ctx.beginPath(); ctx.arc(50, -8, 6, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = "#140000"; ctx.beginPath(); ctx.arc(52, -8, 3, 0, 7); ctx.fill();
     ctx.restore();
   }
 
@@ -1207,9 +1233,51 @@
     if (invuln > 0 && boosting <= 0) ctx.globalAlpha = 0.45 + Math.sin(performance.now() / 45) * 0.3;
     ctx.translate(player.x, player.y);
     ctx.rotate(player.rot);
-    TIERS[curLevel].draw(PLAYER_R);
+    if (boosting > 0) drawSub(PLAYER_R);
+    else TIERS[curLevel].draw(PLAYER_R);
     ctx.restore();
     ctx.globalAlpha = 1;
+  }
+
+  // cute little submarine ("AQUAPOD") the prawn rides during a jet
+  function drawSub(r) {
+    const R = r * 1.7;
+    ctx.shadowColor = "#ffd24d"; ctx.shadowBlur = 20;
+    // spinning tail propeller (left)
+    ctx.strokeStyle = "#c77a10"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-R, 0); ctx.lineTo(-R * 1.28, 0); ctx.stroke();
+    ctx.fillStyle = "#ffd24d";
+    const pw = Math.abs(Math.sin(performance.now() / 30)) * R * 0.5 + R * 0.12;
+    ctx.beginPath(); ctx.ellipse(-R * 1.32, 0, R * 0.12, pw, 0, 0, 7); ctx.fill();
+    // hull (yellow capsule)
+    const g = ctx.createLinearGradient(0, -R * 0.7, 0, R * 0.7);
+    g.addColorStop(0, "#ffe27a"); g.addColorStop(1, "#ff9e2e");
+    ctx.fillStyle = g;
+    roundRect(-R, -R * 0.62, R * 2, R * 1.24, R * 0.6); ctx.fill();
+    // nose cone (right)
+    ctx.beginPath(); ctx.moveTo(R * 0.9, -R * 0.5); ctx.quadraticCurveTo(R * 1.5, 0, R * 0.9, R * 0.5); ctx.closePath(); ctx.fill();
+    // conning tower / periscope (top)
+    ctx.beginPath(); ctx.moveTo(-R * 0.25, -R * 0.6); ctx.lineTo(-R * 0.05, -R * 1.05); ctx.lineTo(R * 0.3, -R * 0.6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#c77a10"; ctx.fillRect(-R * 0.02, -R * 1.15, R * 0.16, R * 0.18);
+    // bottom fins
+    ctx.fillStyle = "#ff9e2e";
+    ctx.beginPath(); ctx.moveTo(-R * 0.4, R * 0.55); ctx.lineTo(-R * 0.62, R * 0.95); ctx.lineTo(-R * 0.1, R * 0.6); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    // porthole window
+    ctx.fillStyle = "#08324a"; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(R * 0.18, 0, R * 0.5, 0, 7); ctx.fill(); ctx.stroke();
+    // prawn's cute face peeking out of the window
+    ctx.fillStyle = "#ff8a3c";
+    ctx.beginPath(); ctx.arc(R * 0.18, R * 0.12, R * 0.3, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(R * 0.05, -R * 0.05, R * 0.12, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(R * 0.33, -R * 0.05, R * 0.12, 0, 7); ctx.fill();
+    ctx.fillStyle = "#120a05";
+    ctx.beginPath(); ctx.arc(R * 0.08, -R * 0.05, R * 0.06, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(R * 0.36, -R * 0.05, R * 0.06, 0, 7); ctx.fill();
+    // window gl0ss
+    ctx.fillStyle = "rgba(255,255,255,0.28)";
+    ctx.beginPath(); ctx.arc(R * 0.02, -R * 0.22, R * 0.14, 0, 7); ctx.fill();
   }
 
   // ---------- Creatures (facing right, centered at origin) ----------

@@ -418,11 +418,11 @@ canvas#game {
 /* ---------- Attack (harpoon) button ---------- */
 .attack-btn {
   position: absolute;
-  right: 18px;
-  bottom: 90px;
+  right: 26px;
+  bottom: 136px;
   z-index: 7;
-  width: 68px;
-  height: 68px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   border: 1px solid rgba(127,232,255,0.5);
   background: rgba(20,60,80,0.6);
@@ -435,27 +435,24 @@ canvas#game {
 .attack-btn:active { transform: scale(0.9); background: rgba(56,198,255,0.4); }
 
 
-/* ---------- Movement buttons (UP / DIVE) ---------- */
-.move-pad {
-  position: absolute;
-  left: 18px;
-  bottom: 24px;
-  z-index: 7;
-  display: flex;
-  gap: 14px;
-}
+/* ---------- Movement buttons (UP / DIVE) — big, on opposite sides ---------- */
+.move-pad { display: contents; }
 .mbtn {
-  width: 72px;
-  height: 72px;
+  position: absolute;
+  bottom: 26px;
+  z-index: 7;
+  width: 94px;
+  height: 94px;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.28);
+  border: 2px solid rgba(255,255,255,0.32);
   background: rgba(10,30,45,0.55);
   color: #eaf9ff;
-  font-size: 30px;
+  font-size: 42px;
   cursor: pointer;
   backdrop-filter: blur(2px);
-  box-shadow: 0 0 16px rgba(0,0,0,0.3);
+  box-shadow: 0 0 18px rgba(0,0,0,0.35);
   touch-action: none;
 }
-.mbtn:active { transform: scale(0.9); background: rgba(56,198,255,0.4); }
-#btn-up { background: rgba(56,198,255,0.24); }
+.mbtn:active { transform: scale(0.9); background: rgba(56,198,255,0.45); }
+#btn-up { left: 22px; background: rgba(56,198,255,0.28); }
+#btn-down { right: 22px; background: rgba(56,198,255,0.14); }
