@@ -61,6 +61,7 @@
   };
   let paused = false;
   let holdUp = false, holdDown = false;
+  let darkCanvas = null, dctx = null;
 
   // ---------- Persistent state ----------
   const store = {
@@ -83,7 +84,7 @@
   const SHIELD_MAX   = [1, 2, 2, 3, 3];       // shield charges by tier (prawn now starts with 1)
   const SHIELD_REGEN = [13, 11, 9, 7, 5];     // seconds to regen a charge by tier
   const JET_NEED = 100;                       // meter fill required for a JET
-  const JET_TIME = 3.0;                        // seconds the JET lasts (shorter = controlled)
+  const JET_TIME = 4.0;                        // seconds the JET lasts
   const JET_MAGNET = 300;                     // px pearl-magnet radius during JET
   const JET_COOLDOWN = 1.6;                    // seconds after a JET before another can trigger
   const PEARL_FILL = 7;                        // meter gained per pearl (needs ~15 pearls per JET)
@@ -122,6 +123,7 @@
   let jellyOn, jellyT, jellyNext, jellyEase;
   let sandOn, sandT, sandNext, onSand, rocks, rockTimer, sandEnter;
   let beachOn, beachT, beachNext, beachObs, beachTimer, beachRise, beachFall, beachEnding;
+  let deepOn, deepT, deepWarn, deepNext, lightR, anglers, blobs, angTimer, blobTimer;
   let lastTime = 0;
 
   function reset() {
@@ -164,6 +166,8 @@
     sandOn = false; sandT = 0; sandNext = 150; onSand = false; rocks = []; rockTimer = 1.0; sandEnter = 0;
     // beach stage (above water, on the shore)
     beachOn = false; beachT = 0; beachNext = 220; beachObs = []; beachTimer = 1.0; beachRise = 0; beachFall = 0; beachEnding = false;
+    // midnight zone (dark deep scene)
+    deepOn = false; deepT = 0; deepWarn = 0; deepNext = 300; lightR = 110; anglers = []; blobs = []; angTimer = 1.2; blobTimer = 0.8;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -588,6 +592,31 @@
     }
   }
 
+  // ---------- Midnight Zone (deep dark scene) ----------
+  function angY(a) { return a.baseY + Math.sin(elapsed * 1.5 + a.ph) * a.amp; }
+  function enterDeep() {
+    deepOn = true; deepWarn = 2.0; deepT = 16; deepNext = Math.floor(score) + 340;
+    obstacles = []; enemies = []; anglers = []; blobs = []; lightR = 110;
+    if (boss.active && boss.phase === "chase") boss.phase = "retreat";
+    slowmo = Math.max(slowmo, 1.0);
+    showBanner("⚠️ THE MIDNIGHT ZONE");
+    addFloat(player.x, player.y - 40, "find anglerfish to light the way…", "#8fe8ff");
+    beep(70, 0.6, "sawtooth", 0.09);
+  }
+  function exitDeep() {
+    deepOn = false; jellyEase = EASE_TIME; slowmo = Math.max(slowmo, 1.6); invuln = Math.max(invuln, EASE_TIME + 0.4);
+    player.vy = 0; player.y = Math.min(Math.max(player.y, 120), H - 120);
+    anglers = []; blobs = [];
+    showBanner("🌊 RISING UP!");
+    addScore(30, player.x, player.y - 30, "+30", "#8fffa0");
+  }
+  function spawnAngler() {
+    anglers.push({ x: W + 40, baseY: 90 + Math.random() * (H - 180), amp: 20 + Math.random() * 30, ph: Math.random() * 6, r: 20, got: false });
+  }
+  function spawnBlob() {
+    blobs.push({ x: W + 40, baseY: 70 + Math.random() * (H - 140), amp: 10 + Math.random() * 20, ph: Math.random() * 6, r: 22 + Math.random() * 12 });
+  }
+
   function alertShark() {
     if (!boss.active) { startBoss(); }
     else if (boss.phase === "chase") { boss.timer = Math.max(boss.timer, 10); }
@@ -776,14 +805,16 @@
 
     if (state === STATE.PLAY) {
       // special stages: trigger + countdown (only one at a time)
-      const anySpecial = jellyOn || sandOn || beachOn;
+      const anySpecial = jellyOn || sandOn || beachOn || deepOn;
       if (!anySpecial && !boss.active && jellyEase <= 0) {
         if (score >= jellyNext) enterJelly();
         else if (score >= sandNext) enterSand();
         else if (score >= beachNext) enterBeach();
+        else if (score >= deepNext) enterDeep();
       }
       if (jellyOn) { jellyT -= realDt; if (jellyT <= 0) exitJelly(); }
       if (sandOn) { sandT -= realDt; if (sandT <= 0) exitSand(); }
+      if (deepOn) { if (deepWarn > 0) deepWarn -= realDt; else { deepT -= realDt; if (deepT <= 0) exitDeep(); } }
       if (beachOn) {
         beachT -= realDt;
         if (beachT <= 0 && !beachEnding) { beachEnding = true; beachFall = 1.5; beachObs = []; invuln = Math.max(invuln, 2.2); showBanner("🌊 DIVING BACK…"); beep(240, 0.2, "sine", 0.05); }
@@ -791,7 +822,7 @@
       }
 
       // player physics
-      if (jellyOn && boosting <= 0) {
+      if ((jellyOn || deepOn) && boosting <= 0) {
         // zero-gravity swim: UP/DIVE move you, drag glides you to a stop; edges just clamp
         player.vy *= 0.93;
         player.y += player.vy * gdt;
@@ -841,12 +872,16 @@
 
       // spawns (pearls come thick and fast during a JET so you sweep them up)
       spawnTimer -= gdt;
-      if (spawnTimer <= 0) { if (!jellyOn && !sandOn && !beachOn && jellyEase <= 0) spawnObstacle(); spawnTimer = spawnInterval; }
+      if (spawnTimer <= 0) { if (!jellyOn && !sandOn && !beachOn && !deepOn && jellyEase <= 0) spawnObstacle(); spawnTimer = spawnInterval; }
       if (sandOn && sandEnter <= 0) { rockTimer -= gdt; if (rockTimer <= 0) { spawnRock(); rockTimer = 0.85 + Math.random() * 0.9; } }
       if (beachOn && beachRise <= 0 && !beachEnding) { beachTimer -= gdt; if (beachTimer <= 0) { spawnBeachObs(); beachTimer = 0.9 + Math.random() * 0.9; } }
+      if (deepOn && deepWarn <= 0) {
+        angTimer -= gdt; if (angTimer <= 0) { spawnAngler(); angTimer = 2.4 + Math.random() * 2.0; }
+        blobTimer -= gdt; if (blobTimer <= 0) { spawnBlob(); blobTimer = 1.0 + Math.random() * 1.2; }
+      }
       pearlTimer -= gdt;
       if (pearlTimer <= 0) { spawnPearl(); pearlTimer = boosting > 0 ? 0.32 : 0.9 + Math.random() * 0.9; }
-      if (!sandOn && !beachOn && (jellyOn || elapsed > 6)) {
+      if (!sandOn && !beachOn && !deepOn && (jellyOn || elapsed > 6)) {
         enemyTimer -= gdt;
         if (enemyTimer <= 0) { spawnEnemy(); enemyTimer = jellyOn ? (0.45 + Math.random() * 0.6) : (2.6 + Math.random() * 2.6); }
       }
@@ -983,11 +1018,26 @@
       }
       beachObs = beachObs.filter(o => !o.dead && o.x > -60);
 
+      // midnight zone: collect anglerfish to brighten your light; blobfish just drift
+      for (const a of anglers) {
+        a.x -= speed * 0.7 * gdt;
+        const ay = angY(a);
+        const dx = a.x - player.x, dy = ay - player.y;
+        if (!a.got && dx * dx + dy * dy < (a.r + PLAYER_R + 8) * (a.r + PLAYER_R + 8)) {
+          a.got = true; lightR = Math.min(300, lightR + 42);
+          addScore(4, a.x, ay - 12, "💡 +4", "#ffe259"); burst(a.x, ay, "#ffe259", 16, 200);
+          beep(900, 0.1, "sine", 0.05);
+        }
+      }
+      anglers = anglers.filter(a => !a.got && a.x > -60);
+      for (const b of blobs) b.x -= speed * 0.5 * gdt;
+      blobs = blobs.filter(b => b.x > -60);
+
       // boss predator chase (paused during special stages)
-      if (!jellyOn && !sandOn && !beachOn) updateBoss(realDt, gdt);
+      if (!jellyOn && !sandOn && !beachOn && !deepOn) updateBoss(realDt, gdt);
 
       // floor / ceiling (in the jelly swarm the edges just clamp — no death)
-      if (!jellyOn && !sandOn && !beachOn && jellyEase <= 0 && (player.y + PLAYER_R > H || player.y - PLAYER_R < 0)) takeHit("wall");
+      if (!jellyOn && !sandOn && !beachOn && !deepOn && jellyEase <= 0 && (player.y + PLAYER_R > H || player.y - PLAYER_R < 0)) takeHit("wall");
 
       updateHUD();
     }
@@ -1055,8 +1105,8 @@
       ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill();
     }
 
-    // drifting fish + swaying seaweed (underwater only — hidden on the beach)
-    if (!beachOn) { drawFishAll(); drawSeaweed(); }
+    // drifting fish + swaying seaweed (underwater only — hidden on beach & in the dark deep)
+    if (!beachOn && !deepOn) { drawFishAll(); drawSeaweed(); }
 
     // rising bubbles (underwater only)
     if (!beachOn) {
@@ -1081,6 +1131,11 @@
       ctx.globalAlpha = beachRise > 0 ? Math.max(0, 1 - beachRise / 1.5) : 1;
       drawBeachFloor(); for (const o of beachObs) drawBeachObs(o);
       ctx.globalAlpha = 1;
+    }
+    // midnight zone creatures (blobfish drift, anglerfish glow)
+    if (deepOn) {
+      for (const b of blobs) drawBlob(b.x, b.baseY + Math.sin(elapsed * 1.2 + b.ph) * b.amp, b.r);
+      for (const a of anglers) drawAngler(a.x, angY(a), a.r);
     }
 
     // pearls
@@ -1162,6 +1217,20 @@
 
     ctx.restore();
 
+    // midnight-zone darkness with light holes around the prawn & anglerfish
+    if (deepOn) {
+      ensureDark();
+      const darkA = deepWarn > 0 ? Math.min(0.93, (2 - deepWarn) / 2 * 0.93) : 0.93;
+      dctx.clearRect(0, 0, W, H);
+      dctx.fillStyle = "rgba(0,3,10," + darkA + ")";
+      dctx.fillRect(0, 0, W, H);
+      dctx.globalCompositeOperation = "destination-out";
+      darkHole(player.x, player.y, lightR);
+      for (const a of anglers) darkHole(a.x, angY(a), 130);
+      dctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(darkCanvas, 0, 0);
+    }
+
     // danger vignette while the predator is closing in
     if (boss.active && boss.phase === "chase") {
       const prox = Math.max(0, Math.min(1, 1 - (player.x - boss.x) / (player.x * 0.9)));
@@ -1182,6 +1251,7 @@
       if (jellyOn) { ctx.fillStyle = "#c9b0ff"; ctx.fillText("🪼 SWARM " + Math.ceil(jellyT) + "s", 16, iy); iy += 26; }
       if (sandOn) { ctx.fillStyle = "#ffe0a8"; ctx.fillText("🏖️ TREK " + Math.ceil(sandT) + "s", 16, iy); iy += 26; }
       if (beachOn) { ctx.fillStyle = "#ffd27a"; ctx.fillText("☀️ BEACH " + Math.ceil(beachT) + "s", 16, iy); iy += 26; }
+      if (deepOn) { ctx.fillStyle = "#8fe8ff"; ctx.fillText("🌑 DEEP " + Math.ceil(deepT) + "s", 16, iy); iy += 26; }
       if (mag > 0) { ctx.fillStyle = "#8fe8ff"; ctx.fillText("🧲 " + Math.ceil(mag) + "s", 16, iy); iy += 26; }
       if (dbl > 0) { ctx.fillStyle = "#ffe259"; ctx.fillText("💰 2× " + Math.ceil(dbl) + "s", 16, iy); iy += 26; }
       if (spd > 0) { ctx.fillStyle = "#8fffa0"; ctx.fillText("🌊 2× " + Math.ceil(spd) + "s", 16, iy); iy += 26; }
@@ -1442,6 +1512,66 @@
       ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(x, top + h * 0.16, 11, 0, 7); ctx.fill();
       ctx.fillStyle = "#3a2a1a"; ctx.beginPath(); ctx.arc(x, top + h * 0.13, 11, Math.PI, 0); ctx.fill();
     }
+  }
+
+  function ensureDark() {
+    if (!darkCanvas) { darkCanvas = document.createElement("canvas"); dctx = darkCanvas.getContext("2d"); }
+    if (darkCanvas.width !== W || darkCanvas.height !== H) { darkCanvas.width = W; darkCanvas.height = H; }
+  }
+  function darkHole(x, y, r) {
+    const g = dctx.createRadialGradient(x, y, r * 0.15, x, y, r);
+    g.addColorStop(0, "rgba(0,0,0,1)");
+    g.addColorStop(0.65, "rgba(0,0,0,0.8)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    dctx.fillStyle = g;
+    dctx.beginPath(); dctx.arc(x, y, r, 0, 7); dctx.fill();
+  }
+
+  function drawBlob(x, y, r) {
+    ctx.save();
+    ctx.fillStyle = "#d98fae"; ctx.shadowColor = "#e0a0c0"; ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(x - r, y);
+    ctx.quadraticCurveTo(x - r, y - r * 0.8, x, y - r * 0.7);
+    ctx.quadraticCurveTo(x + r, y - r * 0.8, x + r, y);
+    ctx.quadraticCurveTo(x + r * 1.1, y + r * 0.9, x, y + r * 0.95);
+    ctx.quadraticCurveTo(x - r * 1.1, y + r * 0.9, x - r, y);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    // droopy nose
+    ctx.fillStyle = "#c97a9a"; ctx.beginPath(); ctx.ellipse(x, y + r * 0.28, r * 0.3, r * 0.36, 0, 0, 7); ctx.fill();
+    // sad eyes + frown
+    ctx.fillStyle = "#3a2030";
+    ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.08, r * 0.1, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.35, y - r * 0.08, r * 0.1, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#3a2030"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y + r * 0.7, r * 0.32, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawAngler(x, y, r) {
+    ctx.save();
+    const lx = x + r * 1.2, ly = y - r * 1.25;
+    // lure glow
+    const g = ctx.createRadialGradient(lx, ly, 1, lx, ly, 28);
+    g.addColorStop(0, "#fff6b0"); g.addColorStop(1, "rgba(255,240,120,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(lx, ly, 28, 0, 7); ctx.fill();
+    // stalk
+    ctx.strokeStyle = "#2a2a30"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + r * 0.4, y - r * 0.5); ctx.quadraticCurveTo(x + r * 0.9, y - r * 1.1, lx, ly); ctx.stroke();
+    // lure bulb
+    ctx.fillStyle = "#fff6b0"; ctx.shadowColor = "#fff2a0"; ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.arc(lx, ly, 5, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+    // dark body
+    ctx.fillStyle = "#20242e"; ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.85, 0, 0, 7); ctx.fill();
+    // toothy grin
+    ctx.fillStyle = "#0a0a10"; ctx.beginPath(); ctx.moveTo(x + r * 0.2, y + r * 0.1); ctx.lineTo(x + r, y - r * 0.1); ctx.lineTo(x + r, y + r * 0.45); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#fff";
+    for (let i = 0; i < 4; i++) { const tx = x + r * 0.35 + i * r * 0.18; ctx.beginPath(); ctx.moveTo(tx, y); ctx.lineTo(tx + 3, y + 6); ctx.lineTo(tx + 6, y); ctx.closePath(); ctx.fill(); }
+    // eye
+    ctx.fillStyle = "#ffdd33"; ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.22, r * 0.17, 0, 7); ctx.fill();
+    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.22, r * 0.08, 0, 7); ctx.fill();
+    ctx.restore();
   }
 
   function drawShark(x, y, snap) {
