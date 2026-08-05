@@ -62,13 +62,16 @@
   let paused = false;
   let holdUp = false, holdDown = false;
   let darkCanvas = null, dctx = null;
+  let pops, stageNext, stageIdx, octos, octoTimer;
 
   // ---------- Persistent state ----------
   const store = {
     best: +(localStorage.getItem("nd_best") || 0),
     streak: +(localStorage.getItem("nd_streak") || 0),
+    pearlBank: +(localStorage.getItem("pd_pearlbank") || 0),
     sound: localStorage.getItem("nd_sound") !== "off",
   };
+  const REVIVE_COST = 1000;
 
   // ---------- Game constants ----------
   const GRAVITY = 1900;        // px/s^2
@@ -168,6 +171,9 @@
     beachOn = false; beachT = 0; beachNext = 220; beachObs = []; beachTimer = 1.0; beachRise = 0; beachFall = 0; beachEnding = false;
     // midnight zone (dark deep scene)
     deepOn = false; deepT = 0; deepWarn = 0; deepNext = 300; lightR = 110; anglers = []; blobs = []; angTimer = 1.2; blobTimer = 0.8; motes = [];
+    octos = []; octoTimer = 0;
+    // pearl-shine pops + stage scheduler (rotates through all special scenes)
+    pops = []; stageNext = 90; stageIdx = 0;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -239,6 +245,18 @@
     g.gain.setValueAtTime(vol, start); g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
     o.connect(g); g.connect(actx.destination);
     o.start(start); o.stop(start + dur + 0.03);
+  }
+
+  // bright sparkly pearl-collect chime (underwater currency!)
+  function sfxPearl(combo) {
+    if (!store.sound) return;
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      const t = actx.currentTime;
+      const base = 1600 + Math.min(700, combo * 12);
+      tone(base, t, 0.08, "triangle", 0.05);
+      tone(base * 1.5, t + 0.035, 0.12, "sine", 0.045);
+    } catch (e) { /* ignore */ }
   }
 
   // dramatic "dun-dun-dunnn + boom" game-over sting
@@ -346,7 +364,10 @@
       el.goCritter.textContent = `${reached.emoji} ${reached.name}`;
       el.goBest.textContent = store.best;
       el.newBest.classList.toggle("hidden", !isBest);
-      el.btnRevive.classList.toggle("hidden", usedRevive || score < 3);
+      const canRevive = !usedRevive && store.pearlBank >= REVIVE_COST;
+      el.btnRevive.classList.toggle("hidden", !canRevive);
+      el.btnRevive.textContent = "💗 REVIVE · 1000 🫧  (have " + store.pearlBank + ")";
+      el.goBest.textContent = store.best + "  ·  🫧 " + store.pearlBank + " banked";
       el.gameoverScreen.classList.remove("hidden");
       refreshMenuStats();
       // Monetization hook: request a game-over ad here (mock)
@@ -356,20 +377,23 @@
 
   // ---------- Revive (monetization hook, mocked) ----------
   function revive() {
-    // In production: show rewarded video, then on completion resume.
+    if (usedRevive || store.pearlBank < REVIVE_COST) return;
+    store.pearlBank -= REVIVE_COST; localStorage.setItem("pd_pearlbank", store.pearlBank);
     usedRevive = true;
-    el.gameoverScreen.classList.add("hidden");
-    el.hud.classList.remove("hidden");
-    el.boostWrap.classList.remove("hidden");
-    // clear nearby obstacles + enemies so player isn't instantly killed
+    // resume as a normal open-water swim (drop out of any special scene)
+    jellyOn = sandOn = beachOn = deepOn = false; beachEnding = false;
+    jellyEase = 0; sandEnter = 0; beachRise = 0; beachFall = 0; deepWarn = 0;
+    anglers = []; blobs = []; octos = []; rocks = []; beachObs = [];
     obstacles = obstacles.filter(o => o.x > player.x + 160);
     enemies = enemies.filter(en => en.x > player.x + 160);
-    invuln = 1.5;
-    player.y = H * 0.45;
-    player.vy = FLAP_V;
-    state = STATE.PLAY;
-    lastTime = performance.now();
-    toast("Revived! Keep going ✨");
+    invuln = 1.8; player.y = H * 0.45; player.vy = FLAP_V;
+    el.gameoverScreen.classList.add("hidden");
+    el.hud.classList.remove("hidden"); el.boostWrap.classList.remove("hidden");
+    el.movePad.classList.remove("hidden");
+    el.btnPause.classList.remove("hidden"); el.btnPause.textContent = "⏸";
+    el.btnAttack.classList.toggle("hidden", ammo <= 0);
+    state = STATE.PLAY; lastTime = performance.now();
+    toast("Revived with 1000 pearls! ✨");
   }
 
   // ---------- Ad hook (mock; swap with real network) ----------
@@ -608,7 +632,7 @@
   function exitDeep() {
     deepOn = false; jellyEase = EASE_TIME; slowmo = Math.max(slowmo, 1.6); invuln = Math.max(invuln, EASE_TIME + 0.4);
     player.vy = 0; player.y = Math.min(Math.max(player.y, 120), H - 120);
-    anglers = []; blobs = []; motes = [];
+    anglers = []; blobs = []; motes = []; octos = [];
     showBanner("🌊 RISING UP!");
     addScore(30, player.x, player.y - 30, "+30", "#8fffa0");
   }
@@ -618,8 +642,12 @@
   function spawnBlob() {
     blobs.push({ x: W + 40, baseY: 70 + Math.random() * (H - 140), amp: 10 + Math.random() * 20, ph: Math.random() * 6, r: 22 + Math.random() * 12 });
   }
+  function spawnOcto() {
+    octos.push({ x: W + 50, y: 90 + Math.random() * (H - 180), ph: Math.random() * 6, r: 26 });
+  }
 
   function alertShark() {
+    if (deepOn) return; // no shark in the midnight zone — the octopus rules there
     if (!boss.active) { startBoss(); }
     else if (boss.phase === "chase") { boss.timer = Math.max(boss.timer, 8); }
     boss.x += 18; boss.lunge = 1.0;   // crashing gives the shark a brief surge
@@ -809,11 +837,10 @@
     if (state === STATE.PLAY) {
       // special stages: trigger + countdown (only one at a time)
       const anySpecial = jellyOn || sandOn || beachOn || deepOn;
-      if (!anySpecial && !boss.active && jellyEase <= 0) {
-        if (score >= jellyNext) enterJelly();
-        else if (score >= sandNext) enterSand();
-        else if (score >= beachNext) enterBeach();
-        else if (score >= deepNext) enterDeep();
+      if (!anySpecial && !boss.active && jellyEase <= 0 && score >= stageNext) {
+        [enterJelly, enterSand, enterBeach, enterDeep][stageIdx % 4](); // rotate through every scene
+        stageIdx++;
+        stageNext = Math.floor(score) + 180;
       }
       if (jellyOn) { jellyT -= realDt; if (jellyT <= 0) exitJelly(); }
       if (sandOn) { sandT -= realDt; if (sandT <= 0) exitSand(); }
@@ -943,8 +970,11 @@
           combo++; bumpMultiplier();
           addScore(1 * multiplier, pr.x, py - 12, "+" + (1 * multiplier), "#7fe8ff");
           if (boosting <= 0) boost = Math.min(JET_NEED, boost + PEARL_FILL); // no recharge mid-JET
-          burst(pr.x, py, "#7fe8ff", 10, 130);
-          beep(1000 + combo * 8, 0.06, "sine", 0.05);
+          burst(pr.x, py, "#ffffff", 8, 90);
+          burst(pr.x, py, "#9fe8ff", 8, 120);
+          pops.push({ x: pr.x, y: py, life: 1 });          // bright coin-shine flash
+          store.pearlBank++; localStorage.setItem("pd_pearlbank", store.pearlBank);
+          sfxPearl(combo);
           if (boss.active && boss.phase === "chase") boss.x -= 20;
         }
       }
@@ -1037,6 +1067,20 @@
       for (const b of blobs) b.x -= speed * 0.5 * gdt;
       blobs = blobs.filter(b => b.x > -60);
       for (const m of motes) { m.y -= m.vy * realDt; m.ph += realDt; m.x += Math.sin(m.ph) * 8 * realDt; if (m.y < -6) { m.y = H + 6; m.x = Math.random() * W; } }
+      // octopus attacker — homes toward the prawn in the dark
+      if (deepOn) {
+        octoTimer -= gdt;
+        if (deepWarn <= 0 && octoTimer <= 0) { spawnOcto(); octoTimer = 5.5 + Math.random() * 3; }
+        for (const o of octos) {
+          o.x -= speed * 0.3 * gdt;
+          o.x += (player.x - o.x) * 0.35 * gdt;
+          o.y += (player.y - o.y) * 0.45 * gdt;
+          o.ph += realDt * 3;
+          const dx = o.x - player.x, dy = o.y - player.y;
+          if (dx * dx + dy * dy < (o.r + PLAYER_R) * (o.r + PLAYER_R)) takeHit("octo");
+        }
+        octos = octos.filter(o => o.x > -80);
+      }
 
       // boss predator chase (paused during special stages)
       if (!jellyOn && !sandOn && !beachOn && !deepOn) updateBoss(realDt, gdt);
@@ -1054,6 +1098,8 @@
       p.life -= realDt * 1.8;
     }
     particles = particles.filter(p => p.life > 0);
+    for (const pp of pops) pp.life -= realDt * 3;
+    pops = pops.filter(pp => pp.life > 0);
 
     if (shake > 0) shake = Math.max(0, shake - realDt * 60);
   }
@@ -1140,6 +1186,7 @@
     // midnight zone creatures (blobfish drift, anglerfish glow)
     if (deepOn) {
       for (const b of blobs) drawBlob(b.x, b.baseY + Math.sin(elapsed * 1.2 + b.ph) * b.amp, b.r);
+      for (const o of octos) drawOcto(o.x, o.y, o.ph, o.r);
       for (const a of anglers) drawAngler(a.x, angY(a), a.r);
     }
 
@@ -1175,6 +1222,18 @@
       ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 7); ctx.fill();
     }
     ctx.globalAlpha = 1;
+    // pearl-shine pops (coin-collect flash)
+    for (const pp of pops) {
+      const k = 1 - pp.life;
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = pp.life;
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(pp.x, pp.y, 6 + k * 30, 0, 7); ctx.stroke();
+      const g = ctx.createRadialGradient(pp.x, pp.y, 0, pp.x, pp.y, 34);
+      g.addColorStop(0, "rgba(255,255,255," + (pp.life * 0.6) + ")");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(pp.x, pp.y, 34, 0, 7); ctx.fill();
+      ctx.restore();
+    }
 
     // JET flame + magnet ring
     if (boosting > 0 && state === STATE.PLAY) {
@@ -1232,6 +1291,7 @@
       dctx.globalCompositeOperation = "destination-out";
       darkHole(player.x, player.y, lightR);
       for (const a of anglers) darkHole(a.x, angY(a), 130);
+      for (const o of octos) darkHole(o.x, o.y, 100);
       dctx.globalCompositeOperation = "source-over";
       ctx.drawImage(darkCanvas, 0, 0);
       // dreamy glowing motes drift over the dark water
@@ -1596,6 +1656,38 @@
     // eye
     ctx.fillStyle = "#ffdd33"; ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.22, r * 0.17, 0, 7); ctx.fill();
     ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.22, r * 0.08, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawOcto(x, y, ph, r) {
+    ctx.save();
+    // tentacles
+    ctx.strokeStyle = "#7a3fd0"; ctx.lineWidth = 6; ctx.lineCap = "round";
+    for (let i = -3; i <= 3; i++) {
+      const tx = x + i * (r * 0.28);
+      ctx.beginPath(); ctx.moveTo(tx, y + r * 0.4);
+      ctx.quadraticCurveTo(tx + Math.sin(ph + i) * 10, y + r * 1.1, tx + Math.sin(ph * 1.3 + i) * 16, y + r * 1.7);
+      ctx.stroke();
+    }
+    ctx.lineCap = "butt";
+    // bulbous head
+    const g = ctx.createLinearGradient(x, y - r, x, y + r);
+    g.addColorStop(0, "#c78bff"); g.addColorStop(1, "#6a2fb0");
+    ctx.fillStyle = g; ctx.shadowColor = "#b06bff"; ctx.shadowBlur = 16;
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.95, 0, 0, 7); ctx.fill();
+    ctx.shadowBlur = 0;
+    // big angry glowing eyes
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.08, r * 0.24, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.35, y - r * 0.08, r * 0.24, 0, 7); ctx.fill();
+    ctx.fillStyle = "#2a0a3a";
+    ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.02, r * 0.12, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.4, y - r * 0.02, r * 0.12, 0, 7); ctx.fill();
+    // angry brows
+    ctx.strokeStyle = "#3a1060"; ctx.lineWidth = 3; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x - r * 0.62, y - r * 0.42); ctx.lineTo(x - r * 0.12, y - r * 0.24); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + r * 0.62, y - r * 0.42); ctx.lineTo(x + r * 0.12, y - r * 0.24); ctx.stroke();
+    ctx.lineCap = "butt";
     ctx.restore();
   }
 
