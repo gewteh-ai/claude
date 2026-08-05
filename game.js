@@ -204,9 +204,24 @@
   function spawnObstacle() {
     const gap = Math.max(GAP_MIN, GAP_BASE - Math.min(score, 90) * 0.85);
     const margin = 70;
-    const gapY = margin + Math.random() * (H - gap - margin * 2);
     // moving gaps appear once you reach the trench (score >= 200)
-    const moveAmp = (score >= 200 && Math.random() < 0.5) ? (24 + Math.random() * 42) : 0;
+    const moveAmp = (score >= 200 && Math.random() < 0.45) ? (20 + Math.random() * 34) : 0;
+    // valid vertical range for the opening (leave room for the gap's own travel if it moves)
+    const lo = margin + moveAmp;
+    const hi = H - gap - margin - moveAmp;
+    // Reachability: the opening can't jump farther vertically than the prawn can travel before the
+    // next wall arrives — otherwise you get impossible top-to-bottom pairs. Clamp near the last gap.
+    const last = obstacles.length ? obstacles[obstacles.length - 1] : null;
+    let gapY;
+    if (last && hi > lo) {
+      const maxDelta = gap * 0.85 + 30;                       // how far the gap may shift between walls
+      const lastY = Math.min(hi, Math.max(lo, last.baseGapY));
+      const mn = Math.max(lo, lastY - maxDelta);
+      const mx = Math.min(hi, lastY + maxDelta);
+      gapY = mn + Math.random() * Math.max(0, mx - mn);
+    } else {
+      gapY = lo + Math.random() * Math.max(0, hi - lo);
+    }
     obstacles.push({ x: W + 40, gapY, baseGapY: gapY, gap, w: 62, passed: false, hue: (score * 18) % 360, moveAmp, movePh: Math.random() * 6 });
   }
 
