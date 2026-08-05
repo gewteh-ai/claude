@@ -459,3 +459,58 @@ canvas#game {
 .mbtn:active { transform: scale(0.9); background: rgba(56,198,255,0.45); }
 #btn-up { left: 22px; background: rgba(56,198,255,0.28); }
 #btn-down { right: 22px; background: rgba(56,198,255,0.14); }
+
+
+/* ---------- Double-pearls button ---------- */
+.btn-double {
+  background: linear-gradient(90deg, #7fe8ff, #38b6ff);
+  color: #04202e;
+  box-shadow: 0 0 22px rgba(56,182,255,0.5);
+  font-size: 16px;
+  padding: 13px 30px;
+}
+
+/* ---------- Ad overlay (mock rewarded / interstitial) ---------- */
+.ad-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 6, 12, 0.92);
+  backdrop-filter: blur(3px);
+}
+.ad-overlay.hidden { display: none; }
+.ad-box {
+  width: min(340px, 90vw);
+  background: linear-gradient(180deg, #0a2436, #061826);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 18px;
+  padding: 16px 16px 20px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.ad-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #04202e;
+  background: #ffd83a;
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+.ad-body {
+  border: 1px dashed rgba(255,255,255,0.2);
+  border-radius: 14px;
+  padding: 26px 12px;
+  margin-bottom: 14px;
+  background: rgba(255,255,255,0.03);
+}
+.ad-fake-icon { font-size: 54px; }
+.ad-fake-txt { font-size: 17px; font-weight: 800; letter-spacing: 1px; margin-top: 6px; color: var(--text); }
+.ad-fake-sub { font-size: 11px; opacity: 0.5; letter-spacing: 1px; margin-top: 4px; }
+.ad-timer { font-size: 14px; opacity: 0.85; letter-spacing: 1px; margin-bottom: 12px; min-height: 18px; }
+.ad-claim { font-size: 16px; padding: 13px 30px; }

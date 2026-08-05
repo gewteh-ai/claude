@@ -13,7 +13,7 @@
   <meta property="og:description" content="Swim the reef, grab pearls, open mystery boxes, and evolve from prawn to leviathan!" />
   <meta property="og:type" content="website" />
 
-  <link rel="stylesheet" href="style.css?v=43" />
+  <link rel="stylesheet" href="style.css?v=44" />
 </head>
 <body>
   <div id="game-wrap">
@@ -68,11 +68,27 @@
       <div class="go-best" id="go-best-line">Best: <span id="go-best">0</span></div>
       <div id="new-best-badge" class="new-best hidden">NEW BEST!</div>
 
-      <button class="btn btn-revive hidden" id="btn-revive">▶ REVIVE (watch ad)</button>
+      <button class="btn btn-revive hidden" id="btn-revive">▶ REVIVE · Watch Ad</button>
+      <button class="btn btn-double hidden" id="btn-double">▶ Double Pearls</button>
+      <button class="btn btn-ghost hidden" id="btn-revive-pearl">💗 Revive · 1000 🫧</button>
       <button class="btn btn-primary" id="btn-retry">RETRY</button>
       <button class="btn btn-ghost" id="btn-share">SHARE SCORE</button>
 
       <div class="ad-slot" id="ad-slot" data-ad="gameover-banner"><span>ad slot</span></div>
+    </div>
+
+    <!-- Rewarded / interstitial ad overlay (built-in mock until a real ad network is wired) -->
+    <div id="ad-overlay" class="ad-overlay hidden">
+      <div class="ad-box">
+        <div class="ad-tag" id="ad-tag">REWARDED AD</div>
+        <div class="ad-body">
+          <div class="ad-fake-icon">🦐</div>
+          <div class="ad-fake-txt">Your advertisement here</div>
+          <div class="ad-fake-sub">This is a demo ad slot</div>
+        </div>
+        <div class="ad-timer" id="ad-timer"></div>
+        <button class="btn btn-primary ad-claim hidden" id="ad-claim">✓ CLAIM REWARD</button>
+      </div>
     </div>
 
     <!-- Top-right controls -->
@@ -91,6 +107,6 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script src="game.js?v=43"></script>
+  <script src="game.js?v=44"></script>
 </body>
 </html>

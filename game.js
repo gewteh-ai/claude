@@ -48,6 +48,12 @@
     btnRetry: document.getElementById("btn-retry"),
     btnShare: document.getElementById("btn-share"),
     btnRevive: document.getElementById("btn-revive"),
+    btnRevivePearl: document.getElementById("btn-revive-pearl"),
+    btnDouble: document.getElementById("btn-double"),
+    adOverlay: document.getElementById("ad-overlay"),
+    adTag: document.getElementById("ad-tag"),
+    adTimer: document.getElementById("ad-timer"),
+    adClaim: document.getElementById("ad-claim"),
     btnSound: document.getElementById("btn-sound"),
     toast: document.getElementById("toast"),
     reward: document.getElementById("reward"),
@@ -64,6 +70,8 @@
   let darkCanvas = null, dctx = null;
   let pops, stageNext, stageIdx, octos, octoTimer;
   let pBubbles, pBubTimer;   // glowing bubble trail that reveals the prawn in the pitch-dark Midnight Zone
+  let runPearls, doubledThisRun;   // pearls collected this run (for the "double pearls" rewarded ad)
+  let adRetryCount = 0;            // interstitial cadence on RETRY
 
   // ---------- Persistent state ----------
   const store = {
@@ -176,6 +184,7 @@
     // pearl-shine pops + stage scheduler (rotates through all special scenes)
     pops = []; stageNext = 90; stageIdx = 0;
     pBubbles = []; pBubTimer = 0;
+    runPearls = 0; doubledThisRun = false;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -382,21 +391,81 @@
       el.goCritter.textContent = `${reached.emoji} ${reached.name}`;
       el.goBest.textContent = store.best;
       el.newBest.classList.toggle("hidden", !isBest);
-      const canRevive = !usedRevive && store.pearlBank >= REVIVE_COST;
-      el.btnRevive.classList.toggle("hidden", !canRevive);
-      el.btnRevive.textContent = "💗 REVIVE · 1000 🫧  (have " + store.pearlBank + ")";
+      // Monetization placements ---------------------------------------
+      // 1) Rewarded revive — watch an ad to continue (free, once per run)
+      el.btnRevive.classList.toggle("hidden", usedRevive);
+      el.btnRevive.textContent = "▶ REVIVE · Watch Ad";
+      // 2) Alternative revive — spend 1000 banked pearls
+      const canPearl = !usedRevive && store.pearlBank >= REVIVE_COST;
+      el.btnRevivePearl.classList.toggle("hidden", !canPearl);
+      el.btnRevivePearl.textContent = "💗 Revive · 1000 🫧";
+      // 3) Rewarded — double the pearls you collected this run
+      const canDouble = runPearls > 0 && !doubledThisRun;
+      el.btnDouble.classList.toggle("hidden", !canDouble);
+      el.btnDouble.textContent = "▶ Double Pearls · +" + runPearls + " 🫧";
       el.goBest.textContent = store.best + "  ·  🫧 " + store.pearlBank + " banked";
       el.gameoverScreen.classList.remove("hidden");
       refreshMenuStats();
-      // Monetization hook: request a game-over ad here (mock)
-      requestAd("gameover-banner");
     }, 550);
   }
 
-  // ---------- Revive (monetization hook, mocked) ----------
-  function revive() {
-    if (usedRevive || store.pearlBank < REVIVE_COST) return;
-    store.pearlBank -= REVIVE_COST; localStorage.setItem("pd_pearlbank", store.pearlBank);
+  // ---------- Ads: network-agnostic layer (mock overlay until a real SDK is wired) ----------
+  // To go live, implement realNetwork() for your chosen network and the rest just works:
+  //   GameDistribution : window.gdsdk.showAd('rewarded') / 'interstitial'
+  //   CrazyGames       : window.CrazyGames.SDK.ad.requestAd('rewarded')
+  //   AdMob (native)   : the mobile wrapper's rewarded/interstitial bridge
+  const Ads = (function () {
+    let busy = false, ticking = null;
+    function realNetwork() {
+      // return { rewarded(onReward,onClose), interstitial(onClose) } when a real SDK is present.
+      // (Left null so the game runs standalone with the built-in mock ad.)
+      return null;
+    }
+    function endMock(onDone) {
+      if (ticking) { clearInterval(ticking); ticking = null; }
+      el.adOverlay.classList.add("hidden");
+      busy = false;
+      if (onDone) onDone();
+    }
+    function mock(kind, onReward, onClose) {
+      if (busy) { if (onClose) onClose(); return; }
+      busy = true;
+      const rewarded = kind === "rewarded";
+      el.adTag.textContent = rewarded ? "REWARDED AD" : "ADVERTISEMENT";
+      el.adClaim.classList.add("hidden");
+      let t = rewarded ? 5 : 3;
+      const label = () => (rewarded ? "Reward in " : "Closing in ") + t + "s…";
+      el.adTimer.textContent = label();
+      el.adOverlay.classList.remove("hidden");
+      ticking = setInterval(() => {
+        t--;
+        if (t > 0) { el.adTimer.textContent = label(); return; }
+        clearInterval(ticking); ticking = null;
+        el.adTimer.textContent = rewarded ? "Ad finished 🎉" : "";
+        el.adClaim.textContent = rewarded ? "✓ CLAIM REWARD" : "✕ CLOSE";
+        el.adClaim.classList.remove("hidden");
+      }, 1000);
+      el.adClaim.onclick = () => endMock(() => {
+        if (rewarded && onReward) onReward();
+        if (onClose) onClose();
+      });
+    }
+    return {
+      rewarded(placement, onReward, onClose) {
+        const net = realNetwork();
+        if (net && net.rewarded) net.rewarded(onReward, onClose);
+        else mock("rewarded", onReward, onClose);
+      },
+      interstitial(onClose) {
+        const net = realNetwork();
+        if (net && net.interstitial) net.interstitial(onClose);
+        else mock("interstitial", null, onClose);
+      }
+    };
+  })();
+
+  // ---------- Revive / continue ----------
+  function doRevive() {
     usedRevive = true;
     // resume as a normal open-water swim (drop out of any special scene)
     jellyOn = sandOn = beachOn = deepOn = false; beachEnding = false;
@@ -411,13 +480,31 @@
     el.btnPause.classList.remove("hidden"); el.btnPause.textContent = "⏸";
     el.btnAttack.classList.toggle("hidden", ammo <= 0);
     state = STATE.PLAY; lastTime = performance.now();
-    toast("Revived with 1000 pearls! ✨");
   }
-
-  // ---------- Ad hook (mock; swap with real network) ----------
-  function requestAd(slotName) {
-    // e.g. googletag.display(slotName) or Adsterra loader.
-    // No-op in sandbox / offline.
+  function reviveByAd() {
+    if (usedRevive) return;
+    Ads.rewarded("revive", () => { doRevive(); toast("Back in the game! ✨"); });
+  }
+  function reviveByPearls() {
+    if (usedRevive || store.pearlBank < REVIVE_COST) return;
+    store.pearlBank -= REVIVE_COST; localStorage.setItem("pd_pearlbank", store.pearlBank);
+    doRevive(); toast("Revived with 1000 pearls! ✨");
+  }
+  function watchDoublePearls() {
+    if (doubledThisRun || runPearls <= 0) return;
+    Ads.rewarded("double", () => {
+      store.pearlBank += runPearls; localStorage.setItem("pd_pearlbank", store.pearlBank);
+      doubledThisRun = true;
+      el.btnDouble.classList.add("hidden");
+      el.goBest.textContent = store.best + "  ·  🫧 " + store.pearlBank + " banked";
+      toast("Pearls doubled! +" + runPearls + " 🫧");
+    });
+  }
+  // RETRY: show a (mock) interstitial every 3rd retry — standard, tolerable cadence
+  function retry() {
+    adRetryCount++;
+    if (adRetryCount % 3 === 0) Ads.interstitial(startGame);
+    else startGame();
   }
 
   // ---------- Excitement helpers ----------
@@ -991,7 +1078,7 @@
           burst(pr.x, py, "#ffffff", 8, 90);
           burst(pr.x, py, "#9fe8ff", 8, 120);
           pops.push({ x: pr.x, y: py, life: 1 });          // bright coin-shine flash
-          store.pearlBank++; localStorage.setItem("pd_pearlbank", store.pearlBank);
+          store.pearlBank++; runPearls++; localStorage.setItem("pd_pearlbank", store.pearlBank);
           sfxPearl(combo);
           if (boss.active && boss.phase === "chase") boss.x -= 20;
         }
@@ -2224,9 +2311,11 @@
 
   // ---------- Button wiring ----------
   el.btnStart.addEventListener("click", startGame);
-  el.btnRetry.addEventListener("click", startGame);
+  el.btnRetry.addEventListener("click", retry);
   el.btnShare.addEventListener("click", shareScore);
-  el.btnRevive.addEventListener("click", revive);
+  el.btnRevive.addEventListener("click", reviveByAd);
+  el.btnRevivePearl.addEventListener("click", reviveByPearls);
+  el.btnDouble.addEventListener("click", watchDoublePearls);
   el.btnBoost.addEventListener("click", doBoost);
   el.btnAttack.addEventListener("click", fireShot);
   el.btnUp.addEventListener("pointerdown", (e) => { e.preventDefault(); holdUp = true; flap(); });
