@@ -63,6 +63,7 @@
   let holdUp = false, holdDown = false;
   let darkCanvas = null, dctx = null;
   let pops, stageNext, stageIdx, octos, octoTimer;
+  let pBubbles, pBubTimer;   // glowing bubble trail that reveals the prawn in the pitch-dark Midnight Zone
 
   // ---------- Persistent state ----------
   const store = {
@@ -174,6 +175,7 @@
     octos = []; octoTimer = 0;
     // pearl-shine pops + stage scheduler (rotates through all special scenes)
     pops = []; stageNext = 90; stageIdx = 0;
+    pBubbles = []; pBubTimer = 0;
   }
 
   // ---------- Starfield (parallax) ----------
@@ -247,15 +249,16 @@
     o.start(start); o.stop(start + dur + 0.03);
   }
 
-  // bright sparkly pearl-collect chime (underwater currency!)
+  // classic two-note "coin" pickup — pearls are underwater currency (Mario/Subway-style ding)
   function sfxPearl(combo) {
     if (!store.sound) return;
     try {
       if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
       const t = actx.currentTime;
-      const base = 1600 + Math.min(700, combo * 12);
-      tone(base, t, 0.08, "triangle", 0.05);
-      tone(base * 1.5, t + 0.035, 0.12, "sine", 0.045);
+      const lift = Math.min(4, Math.floor(combo / 6)) * 40; // pitch creeps up as your combo builds
+      tone(988 + lift, t, 0.07, "square", 0.05);            // B5 blip
+      tone(1319 + lift, t + 0.07, 0.22, "square", 0.055);   // E6 held — the iconic coin "ding"
+      tone((1319 + lift) * 2, t + 0.07, 0.14, "sine", 0.02);// airy sparkle on top
     } catch (e) { /* ignore */ }
   }
 
@@ -555,7 +558,7 @@
     sandOn = false; jellyEase = EASE_TIME; slowmo = Math.max(slowmo, 1.8); invuln = Math.max(invuln, EASE_TIME + 0.6);
     player.vy = 0; player.y = Math.min(Math.max(player.y, 100), H - 100);
     rocks = [];
-    showBanner("🌊 BACK TO THE SEA!");
+    showBanner("🌊 UP OFF THE SEABED!");
     addScore(20, player.x, player.y - 30, "+20", "#8fffa0");
     beep(760, 0.14, "triangle", 0.06);
   }
@@ -907,7 +910,7 @@
       if (sandOn && sandEnter <= 0) { rockTimer -= gdt; if (rockTimer <= 0) { spawnRock(); rockTimer = 0.85 + Math.random() * 0.9; } }
       if (beachOn && beachRise <= 0 && !beachEnding) { beachTimer -= gdt; if (beachTimer <= 0) { spawnBeachObs(); beachTimer = 0.9 + Math.random() * 0.9; } }
       if (deepOn && deepWarn <= 0) {
-        angTimer -= gdt; if (angTimer <= 0) { spawnAngler(); angTimer = 2.4 + Math.random() * 2.0; }
+        angTimer -= gdt; if (angTimer <= 0) { spawnAngler(); angTimer = 1.7 + Math.random() * 1.5; }
         blobTimer -= gdt; if (blobTimer <= 0) { spawnBlob(); blobTimer = 1.0 + Math.random() * 1.2; }
       }
       pearlTimer -= gdt;
@@ -1067,6 +1070,25 @@
       for (const b of blobs) b.x -= speed * 0.5 * gdt;
       blobs = blobs.filter(b => b.x > -60);
       for (const m of motes) { m.y -= m.vy * realDt; m.ph += realDt; m.x += Math.sin(m.ph) * 8 * realDt; if (m.y < -6) { m.y = H + 6; m.x = Math.random() * W; } }
+      // glowing bubble trail streaming off the prawn — the only thing you can see it by in the dark
+      pBubTimer -= realDt;
+      if (deepWarn <= 0 && pBubTimer <= 0) {
+        const moving = Math.abs(player.vy) > 40;
+        pBubTimer = moving ? 0.045 : 0.12;            // faster stream when swimming, gentle drift when still
+        const n = moving ? 2 : 1;
+        for (let i = 0; i < n; i++) {
+          pBubbles.push({
+            x: player.x - PLAYER_R * 0.7 + (Math.random() - 0.5) * 8,
+            y: player.y + (Math.random() - 0.5) * 10,
+            r: 1.6 + Math.random() * 3.2,
+            vx: -20 - Math.random() * 20,
+            vy: -14 - Math.random() * 16,
+            life: 1
+          });
+        }
+      }
+      for (const bb of pBubbles) { bb.x += bb.vx * realDt; bb.y += bb.vy * realDt; bb.vy -= 6 * realDt; bb.life -= realDt * 0.9; }
+      pBubbles = pBubbles.filter(bb => bb.life > 0);
       // octopus attacker — homes toward the prawn in the dark
       if (deepOn) {
         octoTimer -= gdt;
@@ -1284,24 +1306,32 @@
     // midnight-zone darkness with light holes around the prawn & anglerfish
     if (deepOn) {
       ensureDark();
-      const darkA = deepWarn > 0 ? Math.min(0.86, (2 - deepWarn) / 2 * 0.86) : 0.86;
+      // pitch black — only the anglerfish's lure carves light out of the dark
+      const darkA = deepWarn > 0 ? Math.min(0.985, (2 - deepWarn) / 2 * 0.985) : 0.985;
       dctx.clearRect(0, 0, W, H);
-      dctx.fillStyle = "rgba(16,10,40," + darkA + ")";   // dreamy indigo, not pitch black
+      dctx.fillStyle = "rgba(2,3,10," + darkA + ")";
       dctx.fillRect(0, 0, W, H);
       dctx.globalCompositeOperation = "destination-out";
-      darkHole(player.x, player.y, lightR);
-      for (const a of anglers) darkHole(a.x, angY(a), 130);
-      for (const o of octos) darkHole(o.x, o.y, 100);
+      for (const a of anglers) darkHole(a.x, angY(a), a.got ? 150 : 128);
       dctx.globalCompositeOperation = "source-over";
       ctx.drawImage(darkCanvas, 0, 0);
-      // dreamy glowing motes drift over the dark water
+      // faint self-glowing motes (distant bioluminescence — they don't light the scene)
       ctx.save(); ctx.globalCompositeOperation = "lighter";
       for (const m of motes) {
-        const a = Math.max(0, 0.35 + Math.sin(m.ph * 2) * 0.28);
-        const g = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r * 4);
-        g.addColorStop(0, "rgba(170,230,255," + a + ")");
-        g.addColorStop(1, "rgba(170,230,255,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(m.x, m.y, m.r * 4, 0, 7); ctx.fill();
+        const a = Math.max(0, 0.22 + Math.sin(m.ph * 2) * 0.18);
+        const g = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r * 3.2);
+        g.addColorStop(0, "rgba(150,215,255," + a + ")");
+        g.addColorStop(1, "rgba(150,215,255,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(m.x, m.y, m.r * 3.2, 0, 7); ctx.fill();
+      }
+      // the prawn's glowing bubble trail — the only way to see where it is & how it moves
+      for (const bb of pBubbles) {
+        const a = Math.max(0, bb.life) * 0.8;
+        const g = ctx.createRadialGradient(bb.x, bb.y, 0, bb.x, bb.y, bb.r * 3);
+        g.addColorStop(0, "rgba(190,240,255," + a + ")");
+        g.addColorStop(0.5, "rgba(150,220,255," + (a * 0.5) + ")");
+        g.addColorStop(1, "rgba(150,220,255,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bb.x, bb.y, bb.r * 3, 0, 7); ctx.fill();
       }
       ctx.restore();
     }
@@ -1605,31 +1635,52 @@
 
   function drawBlob(x, y, r) {
     ctx.save();
-    ctx.fillStyle = "#d98fae"; ctx.shadowColor = "#e0a0c0"; ctx.shadowBlur = 10;
+    // gentle gelatinous jiggle so the whole body looks soft & curvy
+    const wob = Math.sin(elapsed * 2 + x * 0.05) * r * 0.06;
+    // soft translucent halo
+    ctx.shadowColor = "#f0b8d0"; ctx.shadowBlur = 14;
+    const bg = ctx.createLinearGradient(x, y - r, x, y + r * 1.3);
+    bg.addColorStop(0, "#f2b6cf"); bg.addColorStop(0.55, "#dd95b3"); bg.addColorStop(1, "#c77d9c");
+    ctx.fillStyle = bg;
+    // rounded, saggy, all-curves silhouette (smooth beziers, no straight edges)
     ctx.beginPath();
-    ctx.moveTo(x - r, y);
-    ctx.quadraticCurveTo(x - r, y - r * 0.8, x, y - r * 0.7);
-    ctx.quadraticCurveTo(x + r, y - r * 0.8, x + r, y);
-    ctx.quadraticCurveTo(x + r * 1.1, y + r * 0.9, x, y + r * 0.95);
-    ctx.quadraticCurveTo(x - r * 1.1, y + r * 0.9, x - r, y);
+    ctx.moveTo(x - r * 0.95, y - r * 0.05);
+    ctx.bezierCurveTo(x - r * 1.05, y - r * 0.75, x - r * 0.45, y - r * 1.02, x, y - r * 0.98);      // left cheek up over the head
+    ctx.bezierCurveTo(x + r * 0.45, y - r * 1.02, x + r * 1.05, y - r * 0.75, x + r * 0.95, y - r * 0.05); // right cheek
+    ctx.bezierCurveTo(x + r * 1.18, y + r * 0.5, x + r * 0.7, y + r * 1.05 + wob, x + r * 0.22, y + r * 1.12); // droopy jowl right
+    ctx.bezierCurveTo(x + r * 0.08, y + r * 1.2, x - r * 0.08, y + r * 1.2, x - r * 0.22, y + r * 1.12);       // saggy chin
+    ctx.bezierCurveTo(x - r * 0.7, y + r * 1.05 - wob, x - r * 1.18, y + r * 0.5, x - r * 0.95, y - r * 0.05);  // droopy jowl left
     ctx.closePath(); ctx.fill();
     ctx.shadowBlur = 0;
-    // big droopy nose
-    ctx.fillStyle = "#c97a9a"; ctx.beginPath(); ctx.ellipse(x, y + r * 0.34, r * 0.42, r * 0.48, 0, 0, 7); ctx.fill();
-    // big sad eyes (white + pupil)
+    // big curvy droopy bulbous nose
+    ctx.fillStyle = "#c97a9a";
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.26, y + r * 0.16);
+    ctx.bezierCurveTo(x - r * 0.34, y + r * 0.6, x - r * 0.16, y + r * 0.86, x, y + r * 0.86);
+    ctx.bezierCurveTo(x + r * 0.16, y + r * 0.86, x + r * 0.34, y + r * 0.6, x + r * 0.26, y + r * 0.16);
+    ctx.closePath(); ctx.fill();
+    // soft nose highlight
+    ctx.fillStyle = "rgba(255,220,235,0.55)"; ctx.beginPath(); ctx.ellipse(x - r * 0.06, y + r * 0.42, r * 0.1, r * 0.16, 0, 0, 7); ctx.fill();
+    // big sad eyes (white + pupil + shine)
     ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(x - r * 0.38, y - r * 0.12, r * 0.22, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(x + r * 0.38, y - r * 0.12, r * 0.22, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x - r * 0.4, y - r * 0.14, r * 0.26, r * 0.24, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + r * 0.4, y - r * 0.14, r * 0.26, r * 0.24, 0, 0, 7); ctx.fill();
     ctx.fillStyle = "#2a1620";
-    ctx.beginPath(); ctx.arc(x - r * 0.33, y - r * 0.05, r * 0.11, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(x + r * 0.43, y - r * 0.05, r * 0.11, 0, 7); ctx.fill();
-    // droopy eyebrows
+    ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.05, r * 0.12, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.45, y - r * 0.05, r * 0.12, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(x - r * 0.31, y - r * 0.1, r * 0.04, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + r * 0.49, y - r * 0.1, r * 0.04, 0, 7); ctx.fill();
+    // curvy droopy eyebrows
     ctx.strokeStyle = "#8a5565"; ctx.lineWidth = 3; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(x - r * 0.58, y - r * 0.36); ctx.lineTo(x - r * 0.18, y - r * 0.26); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x + r * 0.58, y - r * 0.36); ctx.lineTo(x + r * 0.18, y - r * 0.26); ctx.stroke();
-    // big frown
-    ctx.strokeStyle = "#3a2030"; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(x, y + r * 0.9, r * 0.42, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - r * 0.62, y - r * 0.34); ctx.quadraticCurveTo(x - r * 0.4, y - r * 0.46, x - r * 0.16, y - r * 0.28); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + r * 0.62, y - r * 0.34); ctx.quadraticCurveTo(x + r * 0.4, y - r * 0.46, x + r * 0.16, y - r * 0.28); ctx.stroke();
+    // curvy pouty lips (a soft wavy frown)
+    ctx.strokeStyle = "#7a2f48"; ctx.lineWidth = 3.4;
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.34, y + r * 0.98);
+    ctx.quadraticCurveTo(x, y + r * 0.72, x + r * 0.34, y + r * 0.98);
+    ctx.stroke();
     ctx.lineCap = "butt";
     ctx.restore();
   }
