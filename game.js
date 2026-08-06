@@ -2295,10 +2295,10 @@
   function shareScore() {
     const tier = TIERS[levelForScore(score)];
     const blocks = tier.emoji.repeat(Math.min(8, Math.max(1, Math.round(score / 6)))) || "🦐";
-    const text = `PRAWN DASH 🦐\nScore: ${score}  (best ${store.best}) — evolved to ${tier.name} ${tier.emoji}!\n${blocks}\nCan you out-swim me?`;
+    const text = `PRAWNSTAR 🦐⭐\nScore: ${score}  (best ${store.best}) — evolved to ${tier.name} ${tier.emoji}!\n${blocks}\nCan you out-swim me?`;
     const url = location.href;
     if (navigator.share) {
-      navigator.share({ title: "Prawn Dash", text, url }).catch(() => {});
+      navigator.share({ title: "Prawnstar", text, url }).catch(() => {});
     } else if (navigator.clipboard) {
       navigator.clipboard.writeText(text + "\n" + url).then(
         () => toast("Score copied — paste & share! 📋"),
