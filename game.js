@@ -409,18 +409,46 @@
     }, 550);
   }
 
-  // ---------- Ads: network-agnostic layer (mock overlay until a real SDK is wired) ----------
-  // To go live, implement realNetwork() for your chosen network and the rest just works:
-  //   GameDistribution : window.gdsdk.showAd('rewarded') / 'interstitial'
-  //   CrazyGames       : window.CrazyGames.SDK.ad.requestAd('rewarded')
-  //   AdMob (native)   : the mobile wrapper's rewarded/interstitial bridge
+  // ---------- Ads: GameMonetize SDK with a built-in mock fallback ----------
+  // The SDK bootstrap lives in index.html (window.SDK_OPTIONS + api.gamemonetize.com/sdk.js).
+  // Its onEvent handler calls into window.PrawnstarAds below. When the real SDK isn't ready
+  // (local preview, no ad fill, blocked network) we transparently fall back to the mock overlay.
   const Ads = (function () {
     let busy = false, ticking = null;
-    function realNetwork() {
-      // return { rewarded(onReward,onClose), interstitial(onClose) } when a real SDK is present.
-      // (Left null so the game runs standalone with the built-in mock ad.)
-      return null;
+    let sdkReady = false;
+    let pending = null;      // { onReward, onClose, rewarded } while a real ad is playing
+    let safety = null;       // watchdog so the game never hangs if an ad never returns
+
+    function muteForAd(on) {
+      try { if (actx) { on ? actx.suspend() : actx.resume(); } } catch (e) { /* ignore */ }
     }
+    function resolvePending() {
+      if (!pending) return;
+      const p = pending; pending = null;
+      if (safety) { clearTimeout(safety); safety = null; }
+      busy = false;
+      muteForAd(false);
+      if (p.rewarded && p.onReward) p.onReward();
+      if (p.onClose) p.onClose();
+    }
+
+    // Called by the GameMonetize SDK via index.html's onEvent handler
+    const bridge = {
+      onSdkReady() { sdkReady = true; },
+      onAdPause() { muteForAd(true); },          // ad started — mute (mandatory) / audio paused
+      onAdResume() { resolvePending(); }         // ad finished — resume + grant reward / close
+    };
+    window.PrawnstarAds = bridge;
+
+    function showReal(rewarded, onReward, onClose) {
+      pending = { onReward, onClose, rewarded };
+      busy = true;
+      // watchdog: if the SDK never fires GAME_START (no-fill / blocked), resolve anyway after 20s
+      safety = setTimeout(resolvePending, 20000);
+      try { window.sdk.showBanner(); }
+      catch (e) { resolvePending(); }            // grant the reward rather than punish the player
+    }
+
     function endMock(onDone) {
       if (ticking) { clearInterval(ticking); ticking = null; }
       el.adOverlay.classList.add("hidden");
@@ -450,15 +478,19 @@
         if (onClose) onClose();
       });
     }
+    // Real network available only once the SDK is ready and exposes showBanner()
+    function useReal() {
+      return sdkReady && typeof window.sdk !== "undefined" && typeof window.sdk.showBanner === "function";
+    }
     return {
       rewarded(placement, onReward, onClose) {
-        const net = realNetwork();
-        if (net && net.rewarded) net.rewarded(onReward, onClose);
+        if (busy) { if (onClose) onClose(); return; }
+        if (useReal()) showReal(true, onReward, onClose);
         else mock("rewarded", onReward, onClose);
       },
       interstitial(onClose) {
-        const net = realNetwork();
-        if (net && net.interstitial) net.interstitial(onClose);
+        if (busy) { if (onClose) onClose(); return; }
+        if (useReal()) showReal(false, null, onClose);
         else mock("interstitial", null, onClose);
       }
     };
