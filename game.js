@@ -391,16 +391,17 @@
       el.goCritter.textContent = `${reached.emoji} ${reached.name}`;
       el.goBest.textContent = store.best;
       el.newBest.classList.toggle("hidden", !isBest);
-      // Monetization placements ---------------------------------------
+      // Monetization placements (only shown when a real ad network is present) --------
+      const adsOn = Ads.available();
       // 1) Rewarded revive — watch an ad to continue (free, once per run)
-      el.btnRevive.classList.toggle("hidden", usedRevive);
+      el.btnRevive.classList.toggle("hidden", usedRevive || !adsOn);
       el.btnRevive.textContent = "▶ REVIVE · Watch Ad";
-      // 2) Alternative revive — spend 1000 banked pearls
+      // 2) Alternative revive — spend 1000 banked pearls (always available as a game mechanic)
       const canPearl = !usedRevive && store.pearlBank >= REVIVE_COST;
       el.btnRevivePearl.classList.toggle("hidden", !canPearl);
       el.btnRevivePearl.textContent = "💗 Revive · 1000 🫧";
       // 3) Rewarded — double the pearls you collected this run
-      const canDouble = runPearls > 0 && !doubledThisRun;
+      const canDouble = adsOn && runPearls > 0 && !doubledThisRun;
       el.btnDouble.classList.toggle("hidden", !canDouble);
       el.btnDouble.textContent = "▶ Double Pearls · +" + runPearls + " 🫧";
       el.goBest.textContent = store.best + "  ·  🫧 " + store.pearlBank + " banked";
@@ -483,6 +484,7 @@
       return sdkReady && typeof window.sdk !== "undefined" && typeof window.sdk.showBanner === "function";
     }
     return {
+      available() { return useReal(); },   // true only when a real ad SDK is loaded & ready
       rewarded(placement, onReward, onClose) {
         if (busy) { if (onClose) onClose(); return; }
         if (useReal()) showReal(true, onReward, onClose);
@@ -535,7 +537,7 @@
   // RETRY: show a (mock) interstitial every 3rd retry — standard, tolerable cadence
   function retry() {
     adRetryCount++;
-    if (adRetryCount % 3 === 0) Ads.interstitial(startGame);
+    if (Ads.available() && adRetryCount % 3 === 0) Ads.interstitial(startGame);
     else startGame();
   }
 
