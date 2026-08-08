@@ -3,9 +3,9 @@
   --p2: #38e0ff;   /* lane 1 cyan */
   --p3: #ffd83a;   /* lane 2 gold */
   --p4: #8fffa0;   /* lane 3 green */
-  --bg0: #160a2e;
-  --bg1: #2a0f4a;
-  --text: #f3ecff;
+  --bg0: #04160b;
+  --bg1: #0f3f21;
+  --text: #eafff0;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
 html, body { height: 100%; overflow: hidden; background: var(--bg0); font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; color: var(--text); }
@@ -16,15 +16,15 @@ canvas#game { display: block; width: 100%; height: 100%; background: linear-grad
 .icon-btn { width: 46px; height: 46px; border-radius: 50%; border: none; background: rgba(255,255,255,0.12); color: #fff; font-size: 20px; cursor: pointer; }
 .icon-btn:hover { background: rgba(255,255,255,0.2); }
 
-.screen { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; background: radial-gradient(120% 90% at 50% 0%, rgba(120,60,200,0.35), rgba(10,4,24,0.92)); backdrop-filter: blur(2px); }
+.screen { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; background: radial-gradient(120% 90% at 50% 0%, rgba(45,170,80,0.35), rgba(3,14,7,0.93)); backdrop-filter: blur(2px); }
 .screen.hidden { display: none; }
 
-.logo { font-size: clamp(38px, 12vw, 78px); font-weight: 800; letter-spacing: 2px; line-height: 0.95; text-shadow: 0 0 24px rgba(255,94,168,0.6); }
+.logo { font-size: clamp(38px, 12vw, 78px); font-weight: 800; letter-spacing: 2px; line-height: 0.95; color: #8fffa0; text-shadow: 0 0 24px rgba(80,220,120,0.6); }
 .logo span { display: block; color: var(--p3); text-shadow: 0 0 24px rgba(255,216,58,0.6); }
 .tagline { margin-top: 14px; font-size: clamp(14px, 4vw, 19px); opacity: 0.92; }
 .keys { margin-top: 6px; font-size: 13px; opacity: 0.6; }
 
-.btn { margin-top: 22px; border: none; border-radius: 40px; padding: 16px 40px; font-size: 19px; font-weight: 800; letter-spacing: 1px; cursor: pointer; color: #2a0630; background: linear-gradient(90deg, var(--p1), var(--p3)); box-shadow: 0 0 28px rgba(255,94,168,0.5); }
+.btn { margin-top: 22px; border: none; border-radius: 40px; padding: 16px 40px; font-size: 19px; font-weight: 800; letter-spacing: 1px; cursor: pointer; color: #06210f; background: linear-gradient(90deg, #2fae52, #ffd83a); box-shadow: 0 0 28px rgba(60,200,110,0.5); }
 .btn:hover { filter: brightness(1.07); }
 .btn-primary { }
 .btn-ghost { background: rgba(255,255,255,0.1); color: var(--text); box-shadow: none; font-size: 16px; padding: 13px 28px; }

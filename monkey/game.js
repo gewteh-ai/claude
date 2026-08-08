@@ -18,6 +18,8 @@
     laneW = playW / LANES;
     receptorY = H - Math.max(120, H * 0.16);
     fallSpeed = (receptorY + 60) / fallTime;
+    fireflies = [];
+    for (let i = 0; i < 16; i++) fireflies.push({ x: Math.random() * W, y: 40 + Math.random() * H * 0.6, ph: Math.random() * 7, sp: 0.4 + Math.random() * 0.7 });
   }
   function resize() {
     DPR = Math.min(2, window.devicePixelRatio || 1);
@@ -96,6 +98,17 @@
   }
   function snare(t) { noise(t, 0.13, 0.08, 3000); tone(190, t, 0.1, "triangle", 0.045); }
   function hat(t) { noise(t, 0.03, 0.025, 8000); }
+  function tomHit(freq, t) {
+    if (!actx || !store.sound) return;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq, t);
+    o.frequency.exponentialRampToValueAtTime(freq * 0.6, t + 0.14);
+    o.connect(g); g.connect(actx.destination);
+    g.gain.setValueAtTime(0.17, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.start(t); o.stop(t + 0.2);
+  }
 
   // ---------- Music (an original groove) ----------
   const BPM = 112;
@@ -103,13 +116,15 @@
   // one bar = 8 steps; loop is 16 steps
   const LEAD = [392, 0, 466, 392, 0, 349, 0, 392, 311, 0, 349, 0, 392, 0, 466, 0];
   const BASS = [98, 98, 78, 78, 87, 87, 98, 98]; // per beat (2 steps)
+  const TOM = [0, 0, 0, 220, 0, 0, 175, 0, 0, 0, 0, 247, 0, 196, 0, 0]; // tribal jungle toms
   function playStep(step, t) {
     if (!store.sound || !actx) return;
     if (step % 4 === 0) kick(t);
     if (step % 4 === 2) snare(t);
     hat(t);
+    const tf = TOM[step % 16]; if (tf) tomHit(tf, t);      // jungle congas/toms
     const lead = LEAD[step % 16];
-    if (lead) tone(lead, t, stepDur * 0.9, "square", 0.045);
+    if (lead) tone(lead, t, stepDur * 0.9, "triangle", 0.05); // softer marimba-ish lead
     if (step % 2 === 0) { const b = BASS[(step / 2) % 8]; if (b) tone(b, t, stepDur * 1.7, "sawtooth", 0.05); }
   }
 
@@ -117,7 +132,7 @@
   let notes = [], score = 0, combo = 0, maxCombo = 0, energy = 0;
   let hitCount = 0, noteCount = 0;
   let songTime = 0, audioStart = 0, nextStepTime = 0, schedStep = 0, genStep = 0, lastLane = -1;
-  let laneFlash = [0, 0, 0, 0], popups = [], sparks = [];
+  let laneFlash = [0, 0, 0, 0], popups = [], sparks = [], fireflies = [];
   let poseTimer = 0, poseLane = 0, stumbleTimer = 0;
   const PERF_W = 0.055, GOOD_W = 0.12, MISS_W = 0.17;
   const POSE = 0.22, STUMBLE = 0.45;
@@ -286,30 +301,82 @@
   // ---------- Drawing ----------
   function drawBackground() {
     const t = performance.now() / 1000;
-    // rotating spotlights
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    for (let i = 0; i < 3; i++) {
-      const ang = t * (0.3 + i * 0.12) + i * 2.1;
-      const x = W / 2 + Math.cos(ang) * W * 0.3;
-      const g = ctx.createRadialGradient(x, -40, 0, x, -40, H * 0.9);
-      const col = LANE_COL[i % LANE_COL.length];
-      g.addColorStop(0, hexA(col, 0.12));
-      g.addColorStop(1, hexA(col, 0));
-      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // lush jungle gradient
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#1f6a37"); g.addColorStop(0.45, "#0f3f21"); g.addColorStop(1, "#04160b");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // warm sun shafts through the canopy
+    const sun = ctx.createRadialGradient(W * 0.5, -H * 0.12, 0, W * 0.5, -H * 0.12, H * 0.95);
+    sun.addColorStop(0, "rgba(255,224,130,0.20)"); sun.addColorStop(1, "rgba(255,224,130,0)");
+    ctx.fillStyle = sun; ctx.fillRect(0, 0, W, H);
+
+    // distant canopy silhouette along the top
+    ctx.fillStyle = "rgba(4,22,11,0.6)";
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W, 0); ctx.lineTo(W, H * 0.14);
+    for (let x = W; x >= 0; x -= 36) ctx.lineTo(x, H * 0.14 + Math.sin(x * 0.05) * 12 + Math.sin(x * 0.013) * 8);
+    ctx.closePath(); ctx.fill();
+
+    // fireflies drifting through the jungle
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    for (const f of fireflies) {
+      const fx = f.x + Math.sin(t * f.sp + f.ph) * 20;
+      const fy = f.y + Math.cos(t * f.sp * 0.8 + f.ph) * 16;
+      const a = Math.max(0, 0.35 + Math.sin(t * 3 + f.ph) * 0.35);
+      const gg = ctx.createRadialGradient(fx, fy, 0, fx, fy, 8);
+      gg.addColorStop(0, "rgba(210,255,130," + a + ")"); gg.addColorStop(1, "rgba(210,255,130,0)");
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(fx, fy, 8, 0, 7); ctx.fill();
     }
     ctx.restore();
-    // crowd silhouettes bobbing
+
+    // side trunks + swaying vines
+    ctx.fillStyle = "#241505"; ctx.fillRect(-12, 0, 30, H); ctx.fillRect(W - 18, 0, 30, H);
+    drawVine(22, t); drawVine(W - 22, t + 1.3);
+
+    // jungle-floor bushes bobbing to the beat
     const beat = state === STATE.PLAY ? songTime / (60 / BPM) : t * (BPM / 60);
-    ctx.fillStyle = "rgba(6,2,18,0.75)";
-    const cy = receptorY + 46;
-    for (let i = 0; i < 14; i++) {
-      const x = (i + 0.5) * (W / 14);
+    for (let i = 0; i < 11; i++) {
+      const x = (i + 0.5) * (W / 11);
       const bob = Math.abs(Math.sin(beat * Math.PI + i)) * 6;
-      ctx.beginPath();
-      ctx.arc(x, cy + 30 - bob, 14, 0, 7); ctx.fill();
-      ctx.fillRect(x - 12, cy + 34 - bob, 24, 40);
+      ctx.fillStyle = i % 2 ? "#0a3a1c" : "#0d461f";
+      ctx.beginPath(); ctx.arc(x, H - 14 - bob, 34, Math.PI, 0); ctx.fill();
     }
+
+    // tiki torches flanking the dance floor
+    drawTorch(playLeft - 26, receptorY - 6, t);
+    drawTorch(playLeft + playW + 26, receptorY - 6, t + 0.7);
+  }
+
+  function drawVine(x, t) {
+    ctx.save();
+    ctx.strokeStyle = "#1c6a30"; ctx.lineWidth = 5; ctx.lineCap = "round";
+    ctx.beginPath();
+    for (let y = 0; y <= H * 0.72; y += 10) {
+      const xx = x + Math.sin(y * 0.03 + t) * 10;
+      if (y === 0) ctx.moveTo(xx, y); else ctx.lineTo(xx, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = "#2aa04a";
+    let k = 0;
+    for (let y = 30; y <= H * 0.68; y += 52) {
+      const xx = x + Math.sin(y * 0.03 + t) * 10;
+      const side = (k++ % 2) ? 1 : -1;
+      ctx.save(); ctx.translate(xx, y); ctx.rotate(side * 0.7 + Math.sin(t + y) * 0.1);
+      ctx.beginPath(); ctx.ellipse(side * 14, 0, 16, 7, 0, 0, 7); ctx.fill(); ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawTorch(x, y, t) {
+    ctx.fillStyle = "#3a2412"; ctx.fillRect(x - 4, y, 8, H - y);
+    const gl = ctx.createRadialGradient(x, y - 18, 0, x, y - 18, 90);
+    gl.addColorStop(0, "rgba(255,150,40,0.35)"); gl.addColorStop(1, "rgba(255,150,40,0)");
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = gl;
+    ctx.beginPath(); ctx.arc(x, y - 18, 90, 0, 7); ctx.fill(); ctx.restore();
+    const fl = 1 + Math.sin(t * 18 + x) * 0.15;
+    ctx.fillStyle = "#ff8a1e";
+    ctx.beginPath(); ctx.moveTo(x, y - 40 * fl); ctx.quadraticCurveTo(x + 12, y - 14, x, y - 6); ctx.quadraticCurveTo(x - 12, y - 14, x, y - 40 * fl); ctx.fill();
+    ctx.fillStyle = "#ffd23a";
+    ctx.beginPath(); ctx.moveTo(x, y - 28 * fl); ctx.quadraticCurveTo(x + 7, y - 12, x, y - 6); ctx.quadraticCurveTo(x - 7, y - 12, x, y - 28 * fl); ctx.fill();
   }
 
   function drawLanes() {
@@ -543,8 +610,8 @@
   // ---------- Share / UI ----------
   const SHARE_URL = "https://gewteh-ai.github.io/claude/monkey/";
   function shareGame() {
-    const text = "🐵🎶 Play Monkey Groove — tap to the beat and make the monkey dance!";
-    if (navigator.share) navigator.share({ title: "Monkey Groove", text: text, url: SHARE_URL }).catch(() => {});
+    const text = "🐵🌴 Play Jungle Jiggy — tap to the jungle beat and make the monkey dance!";
+    if (navigator.share) navigator.share({ title: "Jungle Jiggy", text: text, url: SHARE_URL }).catch(() => {});
     else if (navigator.clipboard) navigator.clipboard.writeText(text + " " + SHARE_URL).then(() => showToast("Link copied — invite friends! 📋"), () => showToast(SHARE_URL));
     else showToast(SHARE_URL);
   }
