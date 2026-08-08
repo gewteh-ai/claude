@@ -71,6 +71,7 @@
     btnInstall: document.getElementById("btn-install"),
     installHint: document.getElementById("install-hint"),
     btnInstallClose: document.getElementById("btn-install-close"),
+    btnShareGame: document.getElementById("btn-share-game"),
   };
   let paused = false;
   let holdUp = false, holdDown = false;
@@ -2440,6 +2441,22 @@
     }
   }
 
+  // ---------- Invite / share the game (virality) ----------
+  const SHARE_URL = "https://gewteh-ai.github.io/claude/";
+  function shareGame() {
+    const text = "🦐⭐ Play PrawnStar — swim, evolve from prawn to leviathan & escape the shark!";
+    if (navigator.share) {
+      navigator.share({ title: "PrawnStar", text, url: SHARE_URL }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text + " " + SHARE_URL).then(
+        () => toast("Link copied — paste it to invite friends! 📋"),
+        () => toast(SHARE_URL)
+      );
+    } else {
+      toast(SHARE_URL);
+    }
+  }
+
   // ---------- Button wiring ----------
   el.btnStart.addEventListener("click", startGame);
   el.btnRetry.addEventListener("click", retry);
@@ -2450,6 +2467,7 @@
   el.btnBoost.addEventListener("click", doBoost);
   el.btnAttack.addEventListener("click", fireShot);
   el.btnClaimDaily.addEventListener("click", claimDaily);
+  el.btnShareGame.addEventListener("click", shareGame);
   el.btnUp.addEventListener("pointerdown", (e) => { e.preventDefault(); holdUp = true; flap(); });
   el.btnDown.addEventListener("pointerdown", (e) => { e.preventDefault(); holdDown = true; dive(); });
   window.addEventListener("pointerup", () => { holdUp = false; holdDown = false; });
