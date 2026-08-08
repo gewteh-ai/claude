@@ -365,75 +365,99 @@
   function drawMonkey() {
     const cx = W / 2;
     const base = receptorY - Math.max(150, H * 0.2);
-    const beat = state === STATE.PLAY ? songTime / (60 / BPM) : performance.now() / 500;
-    const bob = Math.sin(beat * Math.PI * 2) * 7;
     const s = Math.min(W, H) * 0.15;
-    ctx.save();
-    ctx.translate(cx, base + bob);
-    if (stumbleTimer > 0) ctx.rotate(Math.sin(performance.now() / 35) * 0.14 * (stumbleTimer / STUMBLE));
-    else ctx.rotate(Math.sin(beat * Math.PI * 2) * 0.04);
+    // dance clock — locked to the song while playing, gentle idle groove otherwise
+    const beatF = state === STATE.PLAY ? songTime / (60 / BPM) : (performance.now() / 1000) * (BPM / 60) * 0.85;
+    const sway = Math.sin(beatF * Math.PI);            // slow side-to-side groove (2-beat)
+    const hop = Math.abs(Math.sin(beatF * Math.PI));   // spring/bounce on every beat
+    const legA = Math.sin(beatF * Math.PI * 2);        // per-beat leg step alternation
+    const wob = Math.sin(beatF * Math.PI * 2);         // fast wobble for arm waves
+    const move = ((beatF / 4) | 0) % 4;                // switch dance move every bar
+    const stumbling = stumbleTimer > 0;
 
     const brown = "#8a5a2b", brownD = "#6d4420", face = "#e9c39a";
-    // tail
-    ctx.strokeStyle = brownD; ctx.lineWidth = s * 0.16; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(s * 0.5, s * 0.7); ctx.quadraticCurveTo(s * 1.3, s * 0.7, s * 1.15, s * 0.0); ctx.stroke();
-    // legs
+    ctx.save();
+    // whole-body groove: sway sideways, hop up, lean into the beat
+    ctx.translate(cx + sway * s * 0.18, base - hop * s * 0.16);
+    if (stumbling) ctx.rotate(Math.sin(performance.now() / 35) * 0.16 * (stumbleTimer / STUMBLE));
+    else ctx.rotate(sway * 0.12);
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+    // ----- stepping legs -----
+    const liftL = Math.max(0, legA) * s * 0.30;
+    const liftR = Math.max(0, -legA) * s * 0.30;
+    ctx.strokeStyle = brown; ctx.lineWidth = s * 0.2;
+    ctx.beginPath(); ctx.moveTo(-s * 0.24, s * 0.62); ctx.lineTo(-s * 0.32 - sway * s * 0.06, s * 1.08 - liftL); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.24, s * 0.62); ctx.lineTo(s * 0.32 - sway * s * 0.06, s * 1.08 - liftR); ctx.stroke();
+    ctx.fillStyle = brownD;
+    ctx.beginPath(); ctx.ellipse(-s * 0.34 - sway * s * 0.06, s * 1.1 - liftL, s * 0.16, s * 0.1, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(s * 0.3 - sway * s * 0.06, s * 1.1 - liftR, s * 0.16, s * 0.1, 0, 0, 7); ctx.fill();
+
+    // ----- swishing tail -----
+    ctx.strokeStyle = brownD; ctx.lineWidth = s * 0.14;
+    ctx.beginPath(); ctx.moveTo(s * 0.45, s * 0.8);
+    ctx.quadraticCurveTo(s * (1.25 + wob * 0.12), s * 0.7, s * (1.08 + wob * 0.18), s * (0.05 + wob * 0.12));
+    ctx.stroke();
+
+    // ----- body -----
     ctx.fillStyle = brown;
-    ctx.beginPath(); ctx.ellipse(-s * 0.32, s * 1.0, s * 0.22, s * 0.3, 0, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(s * 0.32, s * 1.0, s * 0.22, s * 0.3, 0, 0, 7); ctx.fill();
-    // body
-    ctx.beginPath(); ctx.ellipse(0, s * 0.55, s * 0.6, s * 0.62, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, s * 0.55, s * 0.58, s * 0.6, 0, 0, 7); ctx.fill();
     ctx.fillStyle = face;
-    ctx.beginPath(); ctx.ellipse(0, s * 0.6, s * 0.36, s * 0.42, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, s * 0.6, s * 0.34, s * 0.4, 0, 0, 7); ctx.fill();
 
-    // arms — raise toward the lane you just hit
-    const raiseL = (poseTimer > 0 && poseLane <= 1) ? (poseTimer / POSE) : 0;
-    const raiseR = (poseTimer > 0 && poseLane >= 2) ? (poseTimer / POSE) : 0;
-    ctx.strokeStyle = brown; ctx.lineWidth = s * 0.2; ctx.lineCap = "round";
-    // left arm
-    ctx.beginPath(); ctx.moveTo(-s * 0.5, s * 0.5);
-    ctx.lineTo(-s * 0.5 - s * 0.35 * (1 - raiseL) - s * 0.1 * raiseL, s * 0.5 - s * (0.1 + raiseL * 0.9));
-    ctx.stroke();
-    // right arm
-    ctx.beginPath(); ctx.moveTo(s * 0.5, s * 0.5);
-    ctx.lineTo(s * 0.5 + s * 0.35 * (1 - raiseR) + s * 0.1 * raiseR, s * 0.5 - s * (0.1 + raiseR * 0.9));
-    ctx.stroke();
+    // ----- dancing arms (with per-move variety + hit poses) -----
+    let hlx = -s * 0.7, hly = s * 0.5 + legA * s * 0.22;   // default: arms swing opposite legs
+    let hrx = s * 0.7, hry = s * 0.5 - legA * s * 0.22;
+    if (move === 1) {                                        // "raise the roof" — both arms up, waving
+      hlx = -s * 0.42; hly = -s * 0.5 - Math.max(0, wob) * s * 0.16;
+      hrx = s * 0.42; hry = -s * 0.5 - Math.max(0, -wob) * s * 0.16;
+    } else if (move === 3) {                                 // clap toward the center
+      const c = (wob + 1) / 2;
+      hlx = -s * (0.72 - c * 0.5); hly = s * 0.18;
+      hrx = s * (0.72 - c * 0.5); hry = s * 0.18;
+    }
+    if (poseTimer > 0) {                                     // snap an arm up toward the lane you just hit
+      const r = poseTimer / POSE;
+      if (poseLane <= 1) { hlx = -s * (0.34 + 0.14 * (1 - r)); hly = s * 0.5 - s * (0.2 + 1.0 * r); }
+      else { hrx = s * (0.34 + 0.14 * (1 - r)); hry = s * 0.5 - s * (0.2 + 1.0 * r); }
+    }
+    ctx.strokeStyle = brown; ctx.lineWidth = s * 0.19;
+    ctx.beginPath(); ctx.moveTo(-s * 0.45, s * 0.4); ctx.quadraticCurveTo(-s * 0.62, (s * 0.4 + hly) / 2, hlx, hly); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.45, s * 0.4); ctx.quadraticCurveTo(s * 0.62, (s * 0.4 + hry) / 2, hrx, hry); ctx.stroke();
+    ctx.fillStyle = face;
+    ctx.beginPath(); ctx.arc(hlx, hly, s * 0.11, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(hrx, hry, s * 0.11, 0, 7); ctx.fill();
 
-    // head
+    // ----- head (bob + tilt to the groove) -----
+    ctx.save();
+    ctx.translate(0, -hop * s * 0.05);
+    ctx.rotate(sway * 0.16);
     ctx.fillStyle = brown;
     ctx.beginPath(); ctx.arc(0, -s * 0.35, s * 0.55, 0, 7); ctx.fill();
-    // ears
     ctx.beginPath(); ctx.arc(-s * 0.55, -s * 0.4, s * 0.22, 0, 7); ctx.fill();
     ctx.beginPath(); ctx.arc(s * 0.55, -s * 0.4, s * 0.22, 0, 7); ctx.fill();
     ctx.fillStyle = face;
     ctx.beginPath(); ctx.arc(-s * 0.55, -s * 0.4, s * 0.12, 0, 7); ctx.fill();
     ctx.beginPath(); ctx.arc(s * 0.55, -s * 0.4, s * 0.12, 0, 7); ctx.fill();
-    // face patch
     ctx.beginPath(); ctx.ellipse(0, -s * 0.28, s * 0.4, s * 0.42, 0, 0, 7); ctx.fill();
-    // eyes
-    const happy = stumbleTimer <= 0;
+    const happy = !stumbling;
     ctx.fillStyle = "#fff";
     ctx.beginPath(); ctx.arc(-s * 0.16, -s * 0.42, s * 0.12, 0, 7); ctx.fill();
     ctx.beginPath(); ctx.arc(s * 0.16, -s * 0.42, s * 0.12, 0, 7); ctx.fill();
     ctx.fillStyle = "#20140c";
-    const look = happy ? 0 : 0;
-    ctx.beginPath(); ctx.arc(-s * 0.16 + look, -s * 0.4, s * 0.06, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.16 + look, -s * 0.4, s * 0.06, 0, 7); ctx.fill();
-    // nostrils
+    const ex = sway * s * 0.03;
+    ctx.beginPath(); ctx.arc(-s * 0.16 + ex, -s * 0.4, s * 0.06, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.16 + ex, -s * 0.4, s * 0.06, 0, 7); ctx.fill();
     ctx.beginPath(); ctx.arc(-s * 0.07, -s * 0.2, s * 0.03, 0, 7); ctx.fill();
     ctx.beginPath(); ctx.arc(s * 0.07, -s * 0.2, s * 0.03, 0, 7); ctx.fill();
-    // mouth
     ctx.strokeStyle = "#20140c"; ctx.lineWidth = s * 0.05;
     ctx.beginPath();
     if (happy) ctx.arc(0, -s * 0.12, s * 0.16, 0.15 * Math.PI, 0.85 * Math.PI);
     else ctx.arc(0, -s * 0.02, s * 0.14, 1.15 * Math.PI, 1.85 * Math.PI);
     ctx.stroke();
+    if (stumbling) { ctx.fillStyle = "#8fd0ff"; ctx.beginPath(); ctx.arc(s * 0.5, -s * 0.55, s * 0.08, 0, 7); ctx.fill(); }
+    ctx.restore();
 
-    // sweat drop when stumbling
-    if (stumbleTimer > 0) {
-      ctx.fillStyle = "#8fd0ff";
-      ctx.beginPath(); ctx.arc(s * 0.5, -s * 0.55, s * 0.08, 0, 7); ctx.fill();
-    }
     ctx.restore();
   }
 
