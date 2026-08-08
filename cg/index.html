@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#01111c" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Prawnstar — Swim, Evolve & Escape the Shark 🦐⭐</title>
+
+  <meta property="og:title" content="Prawnstar 🦐⭐" />
+  <meta property="og:description" content="Swim the reef, grab pearls, open mystery boxes, and evolve from prawn to leviathan!" />
+  <meta property="og:type" content="website" />
+
+  <link rel="stylesheet" href="style.css" />
+
+</head>
+<body>
+  <div id="game-wrap">
+    <canvas id="game"></canvas>
+
+    <!-- HUD -->
+    <div id="hud" class="hud hidden">
+      <div class="hud-score" id="hud-score">0</div>
+      <div class="hud-best">BEST <span id="hud-best">0</span></div>
+      <div class="hud-combo hidden" id="hud-combo"></div>
+    </div>
+
+    <!-- JET meter + button -->
+    <div class="boost-wrap hidden" id="boost-wrap">
+      <div class="boost-meter"><div class="boost-fill" id="boost-fill"></div></div>
+      <button class="boost-btn hidden" id="btn-boost">🚀 AQUAPOD</button>
+    </div>
+
+    <!-- Movement buttons -->
+    <div class="move-pad hidden" id="move-pad">
+      <button class="mbtn" id="btn-up">⬆</button>
+      <button class="mbtn" id="btn-down">⬇</button>
+    </div>
+
+    <!-- Attack button (harpoon the jellyfish) -->
+    <button class="attack-btn hidden" id="btn-attack">🔱</button>
+
+    <!-- Milestone banner -->
+    <div class="banner hidden" id="banner"></div>
+
+    <!-- Mystery box reward popup -->
+    <div class="reward hidden" id="reward"></div>
+
+    <!-- Start screen -->
+    <div id="start-screen" class="screen">
+      <h1 class="logo">PRAWN<span>STAR</span></h1>
+      <p class="tagline">🦐 Swim the reef. Keep scoring to evolve!</p>
+      <div class="evo">🦐 → 🦞 → 🦀 → 🐙 → 🐋<small>LOBSTER 90 · CRAB 240 · KRAKEN 470 · LEVIATHAN 820</small></div>
+      <button class="btn btn-primary" id="btn-start">TAP TO SWIM</button>
+      <div class="hint">⬆ swim up · ⬇ dive &nbsp;·&nbsp; 🔱 / swipe up / F = harpoon &nbsp;·&nbsp; 🚀 AQUAPOD · 🦈 outswim the shark!</div>
+      <div class="best-line">Best: <span id="start-best">0</span> &nbsp;·&nbsp; Streak: <span id="start-streak">0</span></div>
+    </div>
+
+    <!-- Game over screen -->
+    <div id="gameover-screen" class="screen hidden">
+      <h2 class="go-title">GAME OVER</h2>
+      <div class="go-score">
+        <div class="go-score-num" id="go-score">0</div>
+        <div class="go-score-label">SCORE</div>
+      </div>
+      <div class="go-critter" id="go-critter">🦐 PRAWN</div>
+      <div class="go-best" id="go-best-line">Best: <span id="go-best">0</span></div>
+      <div id="new-best-badge" class="new-best hidden">NEW BEST!</div>
+
+      <button class="btn btn-revive hidden" id="btn-revive">▶ REVIVE · Watch Ad</button>
+      <button class="btn btn-double hidden" id="btn-double">▶ Double Pearls</button>
+      <button class="btn btn-ghost hidden" id="btn-revive-pearl">💗 Revive · 1000 🫧</button>
+      <button class="btn btn-primary" id="btn-retry">RETRY</button>
+      <button class="btn btn-ghost" id="btn-share">SHARE SCORE</button>
+    </div>
+
+    <!-- Rewarded / interstitial ad overlay (built-in mock until a real ad network is wired) -->
+    <div id="ad-overlay" class="ad-overlay hidden">
+      <div class="ad-box">
+        <div class="ad-tag" id="ad-tag">REWARDED AD</div>
+        <div class="ad-body">
+          <div class="ad-fake-icon">🦐</div>
+          <div class="ad-fake-txt">Your advertisement here</div>
+          <div class="ad-fake-sub">This is a demo ad slot</div>
+        </div>
+        <div class="ad-timer" id="ad-timer"></div>
+        <button class="btn btn-primary ad-claim hidden" id="ad-claim">✓ CLAIM REWARD</button>
+      </div>
+    </div>
+
+    <!-- Top-right controls -->
+    <div class="top-controls">
+      <button class="icon-btn hidden" id="btn-pause" title="Pause">⏸</button>
+      <button class="icon-btn" id="btn-sound" title="Sound">🔊</button>
+    </div>
+
+    <!-- Pause overlay -->
+    <div id="pause-screen" class="screen hidden">
+      <h2 class="go-title" style="color:var(--neon-cyan)">PAUSED</h2>
+      <button class="btn btn-primary" id="btn-resume">RESUME</button>
+    </div>
+
+    <!-- Share toast -->
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
