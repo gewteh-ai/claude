@@ -772,7 +772,7 @@
     if (boss.active && boss.phase === "chase") boss.phase = "retreat";
     slowmo = Math.max(slowmo, 1.0);
     showBanner("✨ THE MIDNIGHT ZONE");
-    addFloat(player.x, player.y - 40, "meet the anglerfish… follow the light", "#bfe6ff");
+    addFloat(player.x, player.y - 40, "Grab the anglerfish for light — AVOID the blobfish!", "#bfe6ff");
     beep(70, 0.6, "sine", 0.08);
   }
   function exitDeep() {
@@ -984,9 +984,10 @@
       // special stages: trigger + countdown (only one at a time)
       const anySpecial = jellyOn || sandOn || beachOn || deepOn;
       if (!anySpecial && !boss.active && jellyEase <= 0 && score >= stageNext) {
-        [enterJelly, enterSand, enterBeach, enterDeep][stageIdx % 4](); // rotate through every scene
+        // Midnight Zone is 2nd so players reliably reach the dark anglerfish/blobfish scene early
+        [enterJelly, enterDeep, enterSand, enterBeach][stageIdx % 4]();
         stageIdx++;
-        stageNext = Math.floor(score) + 180;
+        stageNext = Math.floor(score) + 150;
       }
       if (jellyOn) { jellyT -= realDt; if (jellyT <= 0) exitJelly(); }
       if (sandOn) { sandT -= realDt; if (sandT <= 0) exitSand(); }
@@ -1198,7 +1199,7 @@
       }
       beachObs = beachObs.filter(o => !o.dead && o.x > -60);
 
-      // midnight zone: collect anglerfish to brighten your light; blobfish just drift
+      // midnight zone: GRAB anglerfish (your torch) — brightens your light and scores
       for (const a of anglers) {
         a.x -= speed * 0.7 * gdt;
         const ay = angY(a);
@@ -1210,7 +1211,13 @@
         }
       }
       anglers = anglers.filter(a => !a.got && a.x > -60);
-      for (const b of blobs) b.x -= speed * 0.5 * gdt;
+      // AVOID the blobfish — bumping one hurts you
+      for (const b of blobs) {
+        b.x -= speed * 0.5 * gdt;
+        const by = b.baseY + Math.sin(elapsed * 1.2 + b.ph) * b.amp;
+        const dx = b.x - player.x, dy = by - player.y;
+        if (dx * dx + dy * dy < (b.r * 0.8 + PLAYER_R) * (b.r * 0.8 + PLAYER_R)) takeHit("blob");
+      }
       blobs = blobs.filter(b => b.x > -60);
       for (const m of motes) { m.y -= m.vy * realDt; m.ph += realDt; m.x += Math.sin(m.ph) * 8 * realDt; if (m.y < -6) { m.y = H + 6; m.x = Math.random() * W; } }
       // glowing bubble trail streaming off the prawn — the only thing you can see it by in the dark
@@ -1475,6 +1482,15 @@
         g.addColorStop(0.5, "rgba(150,220,255," + (a * 0.5) + ")");
         g.addColorStop(1, "rgba(150,220,255,0)");
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bb.x, bb.y, bb.r * 3, 0, 7); ctx.fill();
+      }
+      // blobfish give off a faint eerie pink glow so you can just make them out to dodge
+      for (const b of blobs) {
+        const by = b.baseY + Math.sin(elapsed * 1.2 + b.ph) * b.amp;
+        const g = ctx.createRadialGradient(b.x, by, 0, b.x, by, b.r * 1.9);
+        g.addColorStop(0, "rgba(255,120,170,0.32)");
+        g.addColorStop(0.6, "rgba(230,90,150,0.14)");
+        g.addColorStop(1, "rgba(230,90,150,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, by, b.r * 1.9, 0, 7); ctx.fill();
       }
       ctx.restore();
     }
