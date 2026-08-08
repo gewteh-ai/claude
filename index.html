@@ -16,7 +16,7 @@
   <meta property="og:description" content="Swim the reef, grab pearls, open mystery boxes, and evolve from prawn to leviathan!" />
   <meta property="og:type" content="website" />
 
-  <link rel="stylesheet" href="style.css?v=49" />
+  <link rel="stylesheet" href="style.css?v=50" />
 
   <!-- GameMonetize HTML5 SDK -->
   <script type="text/javascript">
@@ -114,6 +114,18 @@
       </div>
     </div>
 
+    <!-- iOS install instructions (Safari can't trigger a native install prompt) -->
+    <div id="install-hint" class="daily-overlay hidden">
+      <div class="daily-box">
+        <div class="daily-title">📲 Install Prawnstar</div>
+        <div class="install-steps">
+          Tap the <b>Share</b> button&nbsp; <span class="share-ico">&#x2191;</span> &nbsp;in your browser bar,
+          then choose <b>“Add to Home Screen”</b> to play fullscreen like an app.
+        </div>
+        <button class="btn btn-primary" id="btn-install-close">GOT IT</button>
+      </div>
+    </div>
+
     <!-- Rewarded / interstitial ad overlay (built-in mock until a real ad network is wired) -->
     <div id="ad-overlay" class="ad-overlay hidden">
       <div class="ad-box">
@@ -144,6 +156,6 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script src="game.js?v=49"></script>
+  <script src="game.js?v=50"></script>
 </body>
 </html>

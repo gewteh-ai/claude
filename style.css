@@ -567,3 +567,21 @@ canvas#game {
   margin-bottom: 18px;
   letter-spacing: 0.5px;
 }
+
+
+/* ---------- iOS install hint ---------- */
+.install-steps {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #eaf9ff;
+  margin: 16px 4px 20px;
+}
+.install-steps b { color: #38e0ff; }
+.share-ico {
+  display: inline-block;
+  border: 1.5px solid #38e0ff;
+  border-radius: 6px;
+  padding: 0 6px;
+  color: #38e0ff;
+  font-weight: 800;
+}

@@ -69,6 +69,8 @@
     dailyAmount: document.getElementById("daily-amount"),
     btnClaimDaily: document.getElementById("btn-claim-daily"),
     btnInstall: document.getElementById("btn-install"),
+    installHint: document.getElementById("install-hint"),
+    btnInstallClose: document.getElementById("btn-install-close"),
   };
   let paused = false;
   let holdUp = false, holdDown = false;
@@ -2372,10 +2374,16 @@
   // ---------- PWA install (re-engagement) ----------
   let deferredInstall = null;
   function initPWA() {
+    const hasManifest = !!document.querySelector('link[rel="manifest"]');
     // only register the service worker on builds that ship a manifest (our own hosting)
-    if ("serviceWorker" in navigator && document.querySelector('link[rel="manifest"]')) {
+    if ("serviceWorker" in navigator && hasManifest) {
       try { navigator.serviceWorker.register("sw.js").catch(function () {}); } catch (e) { /* ignore */ }
     }
+    const ua = navigator.userAgent || "";
+    const isIOS = /iphone|ipad|ipod/i.test(ua);
+    const standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+
+    // Android / desktop Chrome & Edge: native install prompt
     window.addEventListener("beforeinstallprompt", function (e) {
       e.preventDefault(); deferredInstall = e;
       if (el.btnInstall) el.btnInstall.classList.remove("hidden");
@@ -2383,13 +2391,25 @@
     window.addEventListener("appinstalled", function () {
       if (el.btnInstall) el.btnInstall.classList.add("hidden");
     });
+    // iOS Safari never fires beforeinstallprompt — show the button with manual steps instead
+    if (isIOS && hasManifest && !standalone && el.btnInstall) {
+      el.btnInstall.classList.remove("hidden");
+    }
     if (el.btnInstall) {
       el.btnInstall.addEventListener("click", async function () {
-        if (!deferredInstall) return;
-        deferredInstall.prompt();
-        try { await deferredInstall.userChoice; } catch (e) { /* ignore */ }
-        deferredInstall = null;
-        el.btnInstall.classList.add("hidden");
+        if (deferredInstall) {
+          deferredInstall.prompt();
+          try { await deferredInstall.userChoice; } catch (e) { /* ignore */ }
+          deferredInstall = null;
+          el.btnInstall.classList.add("hidden");
+        } else if (el.installHint) {
+          el.installHint.classList.remove("hidden");   // iOS / fallback: show "Add to Home Screen" steps
+        }
+      });
+    }
+    if (el.btnInstallClose) {
+      el.btnInstallClose.addEventListener("click", function () {
+        if (el.installHint) el.installHint.classList.add("hidden");
       });
     }
   }
