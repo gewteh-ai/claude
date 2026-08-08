@@ -1,0 +1,47 @@
+:root {
+  --p1: #ff5ea8;   /* lane 0 pink */
+  --p2: #38e0ff;   /* lane 1 cyan */
+  --p3: #ffd83a;   /* lane 2 gold */
+  --p4: #8fffa0;   /* lane 3 green */
+  --bg0: #160a2e;
+  --bg1: #2a0f4a;
+  --text: #f3ecff;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+html, body { height: 100%; overflow: hidden; background: var(--bg0); font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; color: var(--text); }
+#game-wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; touch-action: none; }
+canvas#game { display: block; width: 100%; height: 100%; background: linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 100%); }
+
+.top-controls { position: absolute; top: 14px; right: 14px; z-index: 20; display: flex; gap: 10px; }
+.icon-btn { width: 46px; height: 46px; border-radius: 50%; border: none; background: rgba(255,255,255,0.12); color: #fff; font-size: 20px; cursor: pointer; }
+.icon-btn:hover { background: rgba(255,255,255,0.2); }
+
+.screen { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; background: radial-gradient(120% 90% at 50% 0%, rgba(120,60,200,0.35), rgba(10,4,24,0.92)); backdrop-filter: blur(2px); }
+.screen.hidden { display: none; }
+
+.logo { font-size: clamp(38px, 12vw, 78px); font-weight: 800; letter-spacing: 2px; line-height: 0.95; text-shadow: 0 0 24px rgba(255,94,168,0.6); }
+.logo span { display: block; color: var(--p3); text-shadow: 0 0 24px rgba(255,216,58,0.6); }
+.tagline { margin-top: 14px; font-size: clamp(14px, 4vw, 19px); opacity: 0.92; }
+.keys { margin-top: 6px; font-size: 13px; opacity: 0.6; }
+
+.btn { margin-top: 22px; border: none; border-radius: 40px; padding: 16px 40px; font-size: 19px; font-weight: 800; letter-spacing: 1px; cursor: pointer; color: #2a0630; background: linear-gradient(90deg, var(--p1), var(--p3)); box-shadow: 0 0 28px rgba(255,94,168,0.5); }
+.btn:hover { filter: brightness(1.07); }
+.btn-primary { }
+.btn-ghost { background: rgba(255,255,255,0.1); color: var(--text); box-shadow: none; font-size: 16px; padding: 13px 28px; }
+.hint { margin-top: 16px; font-size: 13px; opacity: 0.6; letter-spacing: 0.4px; }
+.best-line { margin-top: 10px; font-size: 14px; opacity: 0.7; }
+.more { margin-top: 18px; font-size: 13px; color: var(--p2); text-decoration: none; opacity: 0.85; }
+.more:hover { text-decoration: underline; }
+
+.go-title { font-size: clamp(30px, 9vw, 46px); font-weight: 800; color: var(--p1); text-shadow: 0 0 20px rgba(255,94,168,0.6); }
+.go-score { margin: 8px 0; }
+.go-score-num { font-size: clamp(60px, 20vw, 104px); font-weight: 800; color: #fff; text-shadow: 0 0 26px var(--p3); line-height: 1; }
+.go-score-label { font-size: 13px; letter-spacing: 4px; opacity: 0.6; }
+.go-sub { font-size: 14px; opacity: 0.8; margin-top: 4px; }
+.go-best { margin-top: 8px; font-size: 15px; opacity: 0.8; }
+.new-best { margin-top: 8px; font-weight: 800; color: var(--p3); letter-spacing: 2px; animation: pulse 0.8s infinite alternate; }
+.new-best.hidden { display: none; }
+@keyframes pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
+
+.toast { position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 12px 20px; border-radius: 30px; font-size: 14px; z-index: 30; max-width: 90vw; text-align: center; }
+.toast.hidden { display: none; }

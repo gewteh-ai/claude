@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#160a2e" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>Monkey Groove — Tap to the Beat 🐵🎶</title>
+  <meta property="og:title" content="Monkey Groove 🐵🎶" />
+  <meta property="og:description" content="Tap to the beat and make the monkey dance! A free rhythm game." />
+  <link rel="stylesheet" href="style.css?v=1" />
+</head>
+<body>
+  <div id="game-wrap">
+    <canvas id="game"></canvas>
+
+    <!-- Top controls -->
+    <div class="top-controls">
+      <button class="icon-btn" id="btn-sound" title="Sound">🔊</button>
+    </div>
+
+    <!-- Start screen -->
+    <div id="start-screen" class="screen">
+      <h1 class="logo">MONKEY<span>GROOVE</span></h1>
+      <p class="tagline">🐵 Tap to the beat. Keep the groove alive!</p>
+      <div class="keys">Hit the notes as they reach the glowing pads</div>
+      <button class="btn btn-primary" id="btn-start">TAP TO START</button>
+      <div class="hint">📱 Tap a lane &nbsp;·&nbsp; ⌨️ ← ↓ ↑ → (or D F J K)</div>
+      <div class="best-line">Best: <span id="start-best">0</span></div>
+      <a class="more" href="../">🦐 More games: PrawnStar</a>
+    </div>
+
+    <!-- Game over screen -->
+    <div id="over-screen" class="screen hidden">
+      <h2 class="go-title">TIME'S UP!</h2>
+      <div class="go-score"><div class="go-score-num" id="go-score">0</div><div class="go-score-label">SCORE</div></div>
+      <div class="go-sub" id="go-sub">Max combo 0 · 0% hits</div>
+      <div class="go-best" id="go-best-line">Best: <span id="go-best">0</span></div>
+      <div id="new-best" class="new-best hidden">NEW BEST!</div>
+      <button class="btn btn-primary" id="btn-retry">PLAY AGAIN</button>
+      <button class="btn btn-ghost" id="btn-share">📤 Invite Friends</button>
+      <a class="more" href="../">🦐 More games: PrawnStar</a>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  <script src="game.js?v=1"></script>
+</body>
+</html>
