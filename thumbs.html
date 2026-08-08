@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Prawnstar — Thumbnail Generator</title>
+<style>
+  body { margin:0; background:#071a24; color:#eaf9ff; font-family:"Trebuchet MS",Arial,sans-serif; text-align:center; padding:20px; }
+  h1 { color:#38e0ff; }
+  p { opacity:.8; max-width:620px; margin:8px auto; line-height:1.5; }
+  .row { display:flex; flex-wrap:wrap; gap:22px; justify-content:center; margin-top:24px; }
+  .card { background:#0a2735; border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:14px; }
+  canvas { display:block; border-radius:8px; max-width:100%; height:auto; box-shadow:0 8px 24px rgba(0,0,0,.4); }
+  .lbl { margin:10px 0 8px; font-weight:800; letter-spacing:1px; }
+  button { background:linear-gradient(90deg,#38e0ff,#1e9bd8); color:#04202e; border:none; border-radius:22px; padding:11px 22px; font-weight:800; font-size:15px; cursor:pointer; }
+  button:hover { filter:brightness(1.08); }
+  .all { margin-top:26px; }
+  .all button { background:linear-gradient(90deg,#ffd83a,#ff9a2d); padding:14px 34px; font-size:17px; }
+</style>
+</head>
+<body>
+  <h1>🦐⭐ Prawnstar — Thumbnail Generator</h1>
+  <p>Click each <b>Download</b> button below, then upload the matching file to GameMonetize's image boxes. The filenames already match the required sizes.</p>
+  <div class="all"><button onclick="downloadAll()">⬇ Download all 3 images</button></div>
+  <div class="row" id="row"></div>
+
+<script>
+const SIZES = [
+  { w: 512, h: 384, name: "prawnstar-512x384.jpg" },
+  { w: 512, h: 512, name: "prawnstar-512x512.jpg" },
+  { w: 512, h: 340, name: "prawnstar-512x340.jpg" },
+];
+
+function drawStar(ctx, cx, cy, R, color) {
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = R * 0.9;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const ang = Math.PI / 5 * i - Math.PI / 2;
+    const rad = i % 2 ? R * 0.45 : R;
+    ctx.lineTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
+  }
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+
+function drawPrawnMascot(ctx, cx, cy, r) {
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.shadowColor = "#ffb14d"; ctx.shadowBlur = r * 0.5;
+  const grd = ctx.createLinearGradient(0, -r, 0, r);
+  grd.addColorStop(0, "#ffe08a"); grd.addColorStop(0.5, "#ff9124"); grd.addColorStop(1, "#ff5410");
+  ctx.fillStyle = grd;
+  const seg = [
+    { x: r * 0.85, y: 0, s: r * 0.58 },
+    { x: r * 0.35, y: -0.05 * r, s: r * 0.62 },
+    { x: -0.15 * r, y: -0.18 * r, s: r * 0.54 },
+    { x: -0.6 * r, y: -0.42 * r, s: r * 0.44 },
+    { x: -0.95 * r, y: -0.74 * r, s: r * 0.32 },
+  ];
+  for (const s of seg) { ctx.beginPath(); ctx.arc(s.x, s.y, s.s, 0, 7); ctx.fill(); }
+  ctx.fillStyle = "#ffb24d";
+  ctx.beginPath();
+  ctx.moveTo(-0.95 * r, -0.74 * r); ctx.lineTo(-1.55 * r, -1.1 * r);
+  ctx.lineTo(-1.2 * r, -0.55 * r); ctx.lineTo(-1.62 * r, -0.5 * r);
+  ctx.closePath(); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(255,230,180,0.85)"; ctx.lineWidth = r * 0.05;
+  for (const s of seg.slice(1, 4)) { ctx.beginPath(); ctx.arc(s.x, s.y, s.s * 0.7, -1.9, -0.4); ctx.stroke(); }
+  ctx.strokeStyle = "#ffa24d"; ctx.lineWidth = r * 0.04;
+  for (let i = 0; i < 5; i++) { const lx = r * (0.6 - i * 0.32); ctx.beginPath(); ctx.moveTo(lx, r * 0.35); ctx.lineTo(lx - r * 0.08, r * 0.85); ctx.stroke(); }
+  ctx.strokeStyle = "#ffd08a"; ctx.lineWidth = r * 0.045;
+  ctx.beginPath();
+  ctx.moveTo(r * 1.2, -0.05 * r); ctx.quadraticCurveTo(r * 2.2, r * 0.2, r * 2.75, r * 1.0);
+  ctx.moveTo(r * 1.2, 0.1 * r); ctx.quadraticCurveTo(r * 2.0, r * 0.6, r * 2.2, r * 1.35);
+  ctx.stroke();
+  ctx.strokeStyle = "#ffb35c"; ctx.lineWidth = r * 0.05;
+  ctx.beginPath(); ctx.moveTo(r * 1.35, -0.12 * r); ctx.lineTo(r * 1.95, -0.4 * r); ctx.stroke();
+  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(r * 0.98, -r * 0.2, r * 0.2, 0, 7); ctx.fill();
+  ctx.fillStyle = "#20140c"; ctx.beginPath(); ctx.arc(r * 1.03, -r * 0.18, r * 0.1, 0, 7); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(r * 0.97, -r * 0.23, r * 0.035, 0, 7); ctx.fill();
+  ctx.restore();
+}
+
+function drawPoster(ctx, W, H) {
+  // ocean background
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, "#0c5470"); bg.addColorStop(0.55, "#063246"); bg.addColorStop(1, "#02121d");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  // top glow
+  let g = ctx.createRadialGradient(W * 0.5, -H * 0.15, 0, W * 0.5, -H * 0.15, H * 1.0);
+  g.addColorStop(0, "rgba(90,215,245,0.45)"); g.addColorStop(1, "rgba(90,215,245,0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // light rays
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = "rgba(150,230,255,0.05)";
+  for (let i = 0; i < 6; i++) { const x = W * (0.02 + i * 0.18); ctx.beginPath(); ctx.moveTo(x, -10); ctx.lineTo(x + W * 0.05, -10); ctx.lineTo(x + W * 0.16, H); ctx.lineTo(x + W * 0.02, H); ctx.closePath(); ctx.fill(); }
+  ctx.restore();
+  // seabed
+  ctx.fillStyle = "#04202b";
+  ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, H * 0.83);
+  ctx.quadraticCurveTo(W * 0.5, H * 0.73, W, H * 0.85); ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+  // coral silhouettes
+  ctx.fillStyle = "#06303f";
+  for (const cx of [0.08, 0.9]) { ctx.beginPath(); ctx.arc(W * cx, H * 0.86, W * 0.06, Math.PI, 0); ctx.fill(); }
+  // bubbles
+  const bub = [[0.12,0.7,6],[0.2,0.5,4],[0.86,0.42,7],[0.9,0.66,5],[0.78,0.24,4],[0.32,0.28,5],[0.62,0.18,4],[0.5,0.72,5]];
+  ctx.strokeStyle = "rgba(200,240,255,0.5)"; ctx.lineWidth = 1.5;
+  for (const b of bub) { ctx.beginPath(); ctx.arc(W * b[0], H * b[1], b[2], 0, 7); ctx.stroke(); }
+  // pearls near prawn
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  for (const p of [[0.24,0.58],[0.31,0.66],[0.7,0.6]]) {
+    const px = W * p[0], py = H * p[1], pr = Math.min(W,H) * 0.02;
+    const pg = ctx.createRadialGradient(px, py, 0, px, py, pr * 2.4);
+    pg.addColorStop(0, "rgba(255,255,255,0.95)"); pg.addColorStop(1, "rgba(150,220,255,0)");
+    ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(px, py, pr * 2.4, 0, 7); ctx.fill();
+  }
+  ctx.restore();
+  // the star
+  drawStar(ctx, W * 0.68, H * 0.33, Math.min(W, H) * 0.07, "#ffd83a");
+  // prawn mascot
+  drawPrawnMascot(ctx, W * 0.45, H * 0.55, Math.min(W, H) * 0.15);
+  // title
+  const fs = Math.floor(W * 0.108);
+  ctx.font = "800 " + fs + "px 'Trebuchet MS', Arial, sans-serif";
+  ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  const t1 = "PRAWN", t2 = "STAR";
+  const w1 = ctx.measureText(t1).width, w2 = ctx.measureText(t2).width;
+  let x = (W - (w1 + w2)) / 2; const y = H * 0.15;
+  ctx.save(); ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = fs * 0.18; ctx.shadowOffsetY = 2;
+  ctx.fillStyle = "#eaf9ff"; ctx.fillText(t1, x, y);
+  ctx.fillStyle = "#ffd83a"; ctx.fillText(t2, x + w1, y);
+  ctx.restore();
+  // evolution row
+  const efs = Math.floor(H * 0.08);
+  ctx.font = efs + "px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("🦐   🦞   🦀   🐙   🐋", W * 0.5, H * 0.9);
+}
+
+const row = document.getElementById("row");
+const canvases = [];
+SIZES.forEach((sz, idx) => {
+  const card = document.createElement("div"); card.className = "card";
+  const c = document.createElement("canvas"); c.width = sz.w; c.height = sz.h;
+  drawPoster(c.getContext("2d"), sz.w, sz.h);
+  canvases.push(c);
+  const lbl = document.createElement("div"); lbl.className = "lbl"; lbl.textContent = sz.w + " × " + sz.h;
+  const btn = document.createElement("button"); btn.textContent = "⬇ Download " + sz.w + "×" + sz.h;
+  btn.onclick = () => download(c, sz.name);
+  card.appendChild(c); card.appendChild(lbl); card.appendChild(btn);
+  row.appendChild(card);
+});
+
+function download(canvas, name) {
+  const a = document.createElement("a");
+  a.href = canvas.toDataURL("image/jpeg", 0.92);
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+function downloadAll() {
+  SIZES.forEach((sz, i) => setTimeout(() => download(canvases[i], sz.name), i * 400));
+}
+</script>
+</body>
+</html>
