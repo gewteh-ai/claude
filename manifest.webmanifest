@@ -1,6 +1,6 @@
 {
-  "name": "Prawnstar",
-  "short_name": "Prawnstar",
+  "name": "PrawnStar",
+  "short_name": "PrawnStar",
   "description": "Swim, evolve, and escape the shark in this addictive ocean arcade game!",
   "start_url": "./index.html",
   "scope": "./",

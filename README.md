@@ -1,4 +1,4 @@
-# 🦐⭐ Prawnstar
+# 🦐⭐ PrawnStar
 
 A polished, **addictive one-tap arcade game** built with pure HTML/CSS/JS — **no dependencies, no build step, runs offline**.
 

@@ -2429,7 +2429,7 @@
     const text = `PRAWNSTAR 🦐⭐\nScore: ${score}  (best ${store.best}) — evolved to ${tier.name} ${tier.emoji}!\n${blocks}\nCan you out-swim me?`;
     const url = location.href;
     if (navigator.share) {
-      navigator.share({ title: "Prawnstar", text, url }).catch(() => {});
+      navigator.share({ title: "PrawnStar", text, url }).catch(() => {});
     } else if (navigator.clipboard) {
       navigator.clipboard.writeText(text + "\n" + url).then(
         () => toast("Score copied — paste & share! 📋"),
