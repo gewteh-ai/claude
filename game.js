@@ -64,6 +64,11 @@
     btnPause: document.getElementById("btn-pause"),
     btnResume: document.getElementById("btn-resume"),
     pauseScreen: document.getElementById("pause-screen"),
+    dailyOverlay: document.getElementById("daily-overlay"),
+    dailyStreak: document.getElementById("daily-streak"),
+    dailyAmount: document.getElementById("daily-amount"),
+    btnClaimDaily: document.getElementById("btn-claim-daily"),
+    btnInstall: document.getElementById("btn-install"),
   };
   let paused = false;
   let holdUp = false, holdDown = false;
@@ -79,6 +84,8 @@
     streak: +(localStorage.getItem("nd_streak") || 0),
     pearlBank: +(localStorage.getItem("pd_pearlbank") || 0),
     sound: localStorage.getItem("nd_sound") !== "off",
+    dayStreak: +(localStorage.getItem("pd_daystreak") || 0),
+    lastClaim: localStorage.getItem("pd_lastclaim") || "",
   };
   const REVIVE_COST = 1000;
 
@@ -2313,8 +2320,62 @@
   // ---------- UI helpers ----------
   function refreshMenuStats() {
     el.startBest.textContent = store.best;
-    el.startStreak.textContent = store.streak;
+    el.startStreak.textContent = store.dayStreak;   // show the daily-comeback streak
     el.hudBest.textContent = store.best;
+  }
+
+  // ---------- Daily reward (retention hook) ----------
+  const DAILY_BASE = 100, DAILY_STEP = 50, DAILY_MAX = 500;
+  let pendingDailyReward = 0, pendingDailyStreak = 0;
+  function fmtDate(d) { return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+  function checkDailyReward() {
+    const now = new Date();
+    const today = fmtDate(now);
+    if (store.lastClaim === today) return;          // already claimed today
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    pendingDailyStreak = (store.lastClaim === fmtDate(y)) ? store.dayStreak + 1 : 1;  // consecutive?
+    pendingDailyReward = Math.min(DAILY_MAX, DAILY_BASE + (pendingDailyStreak - 1) * DAILY_STEP);
+    el.dailyStreak.textContent = "Day " + pendingDailyStreak + " streak 🔥";
+    el.dailyAmount.textContent = "+" + pendingDailyReward + " 🫧";
+    el.dailyOverlay.classList.remove("hidden");
+  }
+  function claimDaily() {
+    store.pearlBank += pendingDailyReward;
+    store.dayStreak = pendingDailyStreak;
+    store.lastClaim = fmtDate(new Date());
+    localStorage.setItem("pd_pearlbank", store.pearlBank);
+    localStorage.setItem("pd_daystreak", store.dayStreak);
+    localStorage.setItem("pd_lastclaim", store.lastClaim);
+    el.dailyOverlay.classList.add("hidden");
+    burst(W / 2, H / 2, "#ffd83a", 30, 260);
+    toast("Daily reward claimed: +" + pendingDailyReward + " 🫧!");
+    if (store.sound) sfxPearl(24);
+    refreshMenuStats();
+  }
+
+  // ---------- PWA install (re-engagement) ----------
+  let deferredInstall = null;
+  function initPWA() {
+    // only register the service worker on builds that ship a manifest (our own hosting)
+    if ("serviceWorker" in navigator && document.querySelector('link[rel="manifest"]')) {
+      try { navigator.serviceWorker.register("sw.js").catch(function () {}); } catch (e) { /* ignore */ }
+    }
+    window.addEventListener("beforeinstallprompt", function (e) {
+      e.preventDefault(); deferredInstall = e;
+      if (el.btnInstall) el.btnInstall.classList.remove("hidden");
+    });
+    window.addEventListener("appinstalled", function () {
+      if (el.btnInstall) el.btnInstall.classList.add("hidden");
+    });
+    if (el.btnInstall) {
+      el.btnInstall.addEventListener("click", async function () {
+        if (!deferredInstall) return;
+        deferredInstall.prompt();
+        try { await deferredInstall.userChoice; } catch (e) { /* ignore */ }
+        deferredInstall = null;
+        el.btnInstall.classList.add("hidden");
+      });
+    }
   }
 
   let toastTimer = null;
@@ -2352,6 +2413,7 @@
   el.btnDouble.addEventListener("click", watchDoublePearls);
   el.btnBoost.addEventListener("click", doBoost);
   el.btnAttack.addEventListener("click", fireShot);
+  el.btnClaimDaily.addEventListener("click", claimDaily);
   el.btnUp.addEventListener("pointerdown", (e) => { e.preventDefault(); holdUp = true; flap(); });
   el.btnDown.addEventListener("pointerdown", (e) => { e.preventDefault(); holdDown = true; dive(); });
   window.addEventListener("pointerup", () => { holdUp = false; holdDown = false; });
@@ -2379,5 +2441,7 @@
   reset();
   refreshMenuStats();
   el.btnSound.textContent = store.sound ? "🔊" : "🔇";
+  initPWA();
+  checkDailyReward();
   requestAnimationFrame(loop);
 })();

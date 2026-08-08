@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#01111c" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
@@ -13,7 +16,7 @@
   <meta property="og:description" content="Swim the reef, grab pearls, open mystery boxes, and evolve from prawn to leviathan!" />
   <meta property="og:type" content="website" />
 
-  <link rel="stylesheet" href="style.css?v=47" />
+  <link rel="stylesheet" href="style.css?v=48" />
 
   <!-- GameMonetize HTML5 SDK -->
   <script type="text/javascript">
@@ -78,7 +81,8 @@
       <div class="evo">🦐 → 🦞 → 🦀 → 🐙 → 🐋<small>LOBSTER 90 · CRAB 240 · KRAKEN 470 · LEVIATHAN 820</small></div>
       <button class="btn btn-primary" id="btn-start">TAP TO SWIM</button>
       <div class="hint">⬆ swim up · ⬇ dive &nbsp;·&nbsp; 🔱 / swipe up / F = harpoon &nbsp;·&nbsp; 🚀 AQUAPOD · 🦈 outswim the shark!</div>
-      <div class="best-line">Best: <span id="start-best">0</span> &nbsp;·&nbsp; Streak: <span id="start-streak">0</span></div>
+      <div class="best-line">Best: <span id="start-best">0</span> &nbsp;·&nbsp; 🔥 Day streak: <span id="start-streak">0</span></div>
+      <button class="btn btn-ghost hidden" id="btn-install">📲 Install App</button>
     </div>
 
     <!-- Game over screen -->
@@ -97,6 +101,17 @@
       <button class="btn btn-ghost hidden" id="btn-revive-pearl">💗 Revive · 1000 🫧</button>
       <button class="btn btn-primary" id="btn-retry">RETRY</button>
       <button class="btn btn-ghost" id="btn-share">SHARE SCORE</button>
+    </div>
+
+    <!-- Daily reward overlay (retention hook) -->
+    <div id="daily-overlay" class="daily-overlay hidden">
+      <div class="daily-box">
+        <div class="daily-title">🎁 DAILY REWARD</div>
+        <div class="daily-streak" id="daily-streak">Day 1 streak 🔥</div>
+        <div class="daily-amount" id="daily-amount">+100 🫧</div>
+        <div class="daily-sub">Come back every day for a bigger reward!</div>
+        <button class="btn btn-primary" id="btn-claim-daily">CLAIM</button>
+      </div>
     </div>
 
     <!-- Rewarded / interstitial ad overlay (built-in mock until a real ad network is wired) -->
@@ -129,6 +144,6 @@
     <div id="toast" class="toast hidden"></div>
   </div>
 
-  <script src="game.js?v=47"></script>
+  <script src="game.js?v=48"></script>
 </body>
 </html>

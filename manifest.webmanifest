@@ -1,0 +1,14 @@
+{
+  "name": "Prawnstar",
+  "short_name": "Prawnstar",
+  "description": "Swim, evolve, and escape the shark in this addictive ocean arcade game!",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#02121d",
+  "theme_color": "#01111c",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

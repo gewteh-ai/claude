@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0c5470"/>
+      <stop offset="0.6" stop-color="#063246"/>
+      <stop offset="1" stop-color="#02121d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.15" r="0.9">
+      <stop offset="0" stop-color="#5ad7f5" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#5ad7f5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe08a"/>
+      <stop offset="0.5" stop-color="#ff9124"/>
+      <stop offset="1" stop-color="#ff5410"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="96" fill="url(#glow)"/>
+  <!-- star -->
+  <path fill="#ffd83a" d="M360 102 L372.7 132.5 L405.6 135.2 L380.5 156.7 L388.2 188.8 L360 171.6 L331.8 188.8 L339.5 156.7 L314.4 135.2 L347.3 132.5 Z"/>
+  <!-- antenna -->
+  <path d="M330 280 Q408 300 438 372" stroke="#ffd08a" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <!-- tail fan -->
+  <path fill="#ffb24d" d="M187 231 L146 196 L172 244 L142 250 Z"/>
+  <!-- prawn body (overlapping segments) -->
+  <g fill="url(#body)">
+    <circle cx="308" cy="282" r="40"/>
+    <circle cx="274" cy="278" r="43"/>
+    <circle cx="240" cy="269" r="37"/>
+    <circle cx="210" cy="252" r="30"/>
+    <circle cx="187" cy="231" r="22"/>
+  </g>
+  <!-- legs -->
+  <g stroke="#ffa24d" stroke-width="6" stroke-linecap="round">
+    <path d="M300 316 L296 350"/>
+    <path d="M278 320 L272 356"/>
+    <path d="M256 318 L250 352"/>
+  </g>
+  <!-- eye -->
+  <circle cx="317" cy="266" r="15" fill="#fff"/>
+  <circle cx="321" cy="267" r="7.5" fill="#20140c"/>
+  <circle cx="314" cy="262" r="3" fill="#fff"/>
+</svg>
