@@ -36,6 +36,7 @@
     startScreen: document.getElementById("start-screen"),
     overScreen: document.getElementById("over-screen"),
     startBest: document.getElementById("start-best"),
+    goTitle: document.getElementById("go-title"),
     goScore: document.getElementById("go-score"),
     goSub: document.getElementById("go-sub"),
     goBest: document.getElementById("go-best"),
@@ -52,8 +53,10 @@
     sound: localStorage.getItem("mg_sound") !== "off",
   };
 
-  const STATE = { MENU: 0, PLAY: 1, OVER: 2 };
+  const STATE = { MENU: 0, PLAY: 1, JUDGING: 2, OVER: 3 };
   let state = STATE.MENU;
+  // judges (dance rating after the song)
+  let judges = [], judgePhase = 0, judgeTimer = 0, judgeTotal = 0, ratingTitle = "", ratingStars = 0;
 
   // ---------- Audio ----------
   let actx = null;
@@ -158,17 +161,18 @@
     lastTime = performance.now();
   }
 
-  function gameOver() {
+  function showOver() {
     state = STATE.OVER;
     const isBest = score > store.best;
     if (isBest) { store.best = score; localStorage.setItem("mg_best", score); }
+    if (el.goTitle) el.goTitle.textContent = ratingTitle || "TIME'S UP!";
     el.goScore.textContent = score;
     const acc = noteCount ? Math.round((hitCount / noteCount) * 100) : 0;
-    el.goSub.textContent = "Max combo " + maxCombo + " · " + acc + "% hits";
+    el.goSub.textContent = "Judges " + judgeTotal + "/30  " + "\u2B50".repeat(ratingStars) + "  ·  " + acc + "% hits · combo " + maxCombo;
     el.goBest.textContent = store.best;
     el.newBest.classList.toggle("hidden", !isBest);
     el.overScreen.classList.remove("hidden");
-    if (store.sound && actx) { const t = actx.currentTime; tone(392, t, 0.18, "triangle", 0.06); tone(294, t + 0.14, 0.18, "triangle", 0.06); tone(196, t + 0.3, 0.4, "sawtooth", 0.06); }
+    if (store.sound && actx) { const t = actx.currentTime; tone(523, t, 0.14, "triangle", 0.06); tone(659, t + 0.12, 0.14, "triangle", 0.06); tone(784, t + 0.26, 0.34, "triangle", 0.06); }
   }
 
   // ---------- Chart generation ----------
@@ -223,7 +227,7 @@
     stumbleTimer = STUMBLE;
     addPopup("MISS", "#ff6a6a", 0);
     if (store.sound && actx) tone(120, actx.currentTime, 0.16, "sawtooth", 0.05);
-    if (energy <= 0) { energy = 0; gameOver(); }
+    if (energy <= 0) { energy = 0; enterJudging(); }
   }
 
   function laneX(lane) { return playLeft + (lane + 0.5) * laneW; }
@@ -236,6 +240,7 @@
   window.addEventListener("keydown", function (e) {
     if (e.repeat) return;
     if (state === STATE.MENU && (e.code === "Space" || e.code === "Enter")) { startGame(); return; }
+    if (state === STATE.JUDGING && (e.code === "Space" || e.code === "Enter")) { skipJudging(); return; }
     const lane = KEYMAP[e.code];
     if (lane !== undefined) { e.preventDefault(); hitLane(lane); }
   });
@@ -246,6 +251,8 @@
       if (lane >= 0) hitLane(lane);
     } else if (state === STATE.MENU) {
       startGame();
+    } else if (state === STATE.JUDGING) {
+      skipJudging();
     }
   });
 
@@ -272,6 +279,7 @@
     if (poseTimer > 0) poseTimer -= dt;
     if (stumbleTimer > 0) stumbleTimer -= dt;
 
+    if (state === STATE.JUDGING) { updateJudging(dt); return; }
     if (state !== STATE.PLAY) return;
 
     songTime = clockNow() - audioStart;
@@ -295,7 +303,7 @@
 
     // slow energy drain keeps pressure on
     energy -= dt * 1.5;
-    if (energy <= 0) { energy = 0; gameOver(); }
+    if (energy <= 0) { energy = 0; enterJudging(); }
   }
 
   // ---------- Drawing ----------
@@ -508,20 +516,42 @@
     ctx.beginPath(); ctx.arc(s * 0.55, -s * 0.4, s * 0.12, 0, 7); ctx.fill();
     ctx.beginPath(); ctx.ellipse(0, -s * 0.28, s * 0.4, s * 0.42, 0, 0, 7); ctx.fill();
     const happy = !stumbling;
+    const nowms = performance.now();
+    // rosy cheeks
+    ctx.fillStyle = "rgba(255,120,120,0.35)";
+    ctx.beginPath(); ctx.arc(-s * 0.3, -s * 0.16, s * 0.09, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.3, -s * 0.16, s * 0.09, 0, 7); ctx.fill();
+    // big googly eyes (whites bulge out) with wiggling pupils
+    const px = sway * s * 0.05 + Math.sin(nowms / 90) * s * 0.025;
+    const py = -s * 0.42 + Math.sin(nowms / 120) * s * 0.02;
     ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(-s * 0.16, -s * 0.42, s * 0.12, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.16, -s * 0.42, s * 0.12, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(-s * 0.19, -s * 0.44, s * 0.17, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.19, -s * 0.44, s * 0.17, 0, 7); ctx.fill();
     ctx.fillStyle = "#20140c";
-    const ex = sway * s * 0.03;
-    ctx.beginPath(); ctx.arc(-s * 0.16 + ex, -s * 0.4, s * 0.06, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.16 + ex, -s * 0.4, s * 0.06, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(-s * 0.07, -s * 0.2, s * 0.03, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.07, -s * 0.2, s * 0.03, 0, 7); ctx.fill();
-    ctx.strokeStyle = "#20140c"; ctx.lineWidth = s * 0.05;
-    ctx.beginPath();
-    if (happy) ctx.arc(0, -s * 0.12, s * 0.16, 0.15 * Math.PI, 0.85 * Math.PI);
-    else ctx.arc(0, -s * 0.02, s * 0.14, 1.15 * Math.PI, 1.85 * Math.PI);
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(-s * 0.19 + px, py, s * 0.075, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.19 + px, py, s * 0.075, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(-s * 0.21 + px, py - s * 0.03, s * 0.022, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.17 + px, py - s * 0.03, s * 0.022, 0, 7); ctx.fill();
+    // silly waggling eyebrows (raise with the hop)
+    ctx.strokeStyle = "#3a2410"; ctx.lineWidth = s * 0.045; ctx.lineCap = "round";
+    const brow = -s * 0.64 - hop * s * 0.06;
+    ctx.beginPath(); ctx.moveTo(-s * 0.32, brow + s * 0.03); ctx.lineTo(-s * 0.05, brow); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.32, brow + s * 0.03); ctx.lineTo(s * 0.05, brow); ctx.stroke();
+    // nostrils
+    ctx.fillStyle = "#20140c";
+    ctx.beginPath(); ctx.arc(-s * 0.06, -s * 0.2, s * 0.032, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.06, -s * 0.2, s * 0.032, 0, 7); ctx.fill();
+    // big goofy grin (opens with the bounce) + teeth + tongue on the wild move
+    if (happy) {
+      ctx.fillStyle = "#3a1810";
+      ctx.beginPath(); ctx.ellipse(0, -s * 0.04, s * 0.21, s * 0.12 + hop * s * 0.05, 0, 0, Math.PI); ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(-s * 0.17, -s * 0.06, s * 0.34, s * 0.05);
+      if (move === 1) { ctx.fillStyle = "#ff6a8a"; ctx.beginPath(); ctx.arc(0, s * 0.02 + hop * s * 0.04, s * 0.08, 0, Math.PI); ctx.fill(); }
+    } else {
+      ctx.fillStyle = "#3a1810"; ctx.beginPath(); ctx.arc(0, -s * 0.01, s * 0.09, 0, 7); ctx.fill();
+    }
     if (stumbling) { ctx.fillStyle = "#8fd0ff"; ctx.beginPath(); ctx.arc(s * 0.5, -s * 0.55, s * 0.08, 0, 7); ctx.fill(); }
     ctx.restore();
 
@@ -581,6 +611,125 @@
     drawNotes();
     drawSparks();
     if (state === STATE.PLAY) drawHUD();
+    if (state === STATE.JUDGING) drawJudges();
+  }
+
+  // ---------- Judges (rate the dance after the song) ----------
+  function clampI(lo, hi, v) { return Math.max(lo, Math.min(hi, v)); }
+  function irnd(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  function enterJudging() {
+    state = STATE.JUDGING;
+    notes = [];
+    const acc = noteCount ? hitCount / noteCount : 0;
+    const j1 = clampI(2, 10, Math.round(acc * 10) + irnd(-1, 1));                    // technique
+    const j2 = clampI(2, 10, Math.round(Math.min(10, maxCombo / 6)) + irnd(-1, 1));  // style
+    const j3 = clampI(2, 10, Math.round(acc * 6 + Math.min(4, score / 400)) + irnd(-1, 1)); // groove
+    judges = [
+      { cat: "TECHNIQUE", variant: 0, score: j1 },
+      { cat: "STYLE", variant: 1, score: j2 },
+      { cat: "GROOVE", variant: 2, score: j3 },
+    ];
+    judgeTotal = j1 + j2 + j3;
+    ratingStars = judgeTotal >= 27 ? 5 : judgeTotal >= 21 ? 4 : judgeTotal >= 14 ? 3 : judgeTotal >= 8 ? 2 : 1;
+    ratingTitle = judgeTotal >= 27 ? "GROOVE LEGEND!" : judgeTotal >= 21 ? "BANANA BOOGIE!" : judgeTotal >= 14 ? "NICE MOVES!" : "KEEP PRACTISING!";
+    judgePhase = 0; judgeTimer = 0.8;
+    if (store.sound && actx) { const t0 = actx.currentTime; for (let i = 0; i < 6; i++) tomHit(150, t0 + i * 0.06); } // drumroll
+  }
+  function updateJudging(dt) {
+    judgeTimer -= dt;
+    if (judgeTimer > 0) return;
+    if (judgePhase < judges.length) {
+      judgePhase++;
+      if (store.sound && actx) tone(640 + judgePhase * 130, actx.currentTime, 0.13, "triangle", 0.06);
+      judgeTimer = judgePhase < judges.length ? 0.85 : 1.8;
+    } else {
+      showOver();
+    }
+  }
+  function skipJudging() {
+    if (judgePhase < judges.length) { judgePhase = judges.length; judgeTimer = 1.2; }
+    else showOver();
+  }
+  function drawJudges() {
+    ctx.fillStyle = "rgba(3,14,7,0.7)"; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ffd83a"; ctx.font = "800 30px 'Trebuchet MS', Arial";
+    ctx.fillText("🍌 THE JUDGES 🍌", W / 2, H * 0.14);
+    const js = Math.min(W, H) * 0.085;
+    const spacing = Math.min(W * 0.3, 165);
+    const startX = W / 2 - spacing, jy = H * 0.68;
+    for (let i = 0; i < judges.length; i++) {
+      const jx = startX + i * spacing;
+      const revealed = i < judgePhase;
+      drawJudgeMonkey(jx, jy, js, judges[i].variant, revealed);
+      ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.font = "700 13px 'Trebuchet MS', Arial";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(judges[i].cat, jx, jy + js * 1.7);
+      if (revealed) {
+        const cardY = jy - js * 1.9;
+        ctx.fillStyle = "#fff"; roundRectPath(jx - 28, cardY - 32, 56, 64, 9); ctx.fill();
+        ctx.fillStyle = "#e8b100"; ctx.font = "800 42px 'Trebuchet MS', Arial";
+        ctx.fillText(String(judges[i].score), jx, cardY + 2);
+      }
+    }
+    if (judgePhase >= judges.length) {
+      ctx.fillStyle = "#fff"; ctx.font = "800 26px 'Trebuchet MS', Arial";
+      ctx.fillText("TOTAL  " + judgeTotal + " / 30", W / 2, H * 0.29);
+      ctx.fillStyle = "#ffd83a"; ctx.font = "26px Arial";
+      ctx.fillText("\u2B50".repeat(ratingStars), W / 2, H * 0.36);
+      ctx.fillStyle = "#8fffa0"; ctx.font = "800 30px 'Trebuchet MS', Arial";
+      ctx.fillText(ratingTitle, W / 2, H * 0.43);
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.font = "14px 'Trebuchet MS', Arial";
+      ctx.fillText("tap to continue", W / 2, H * 0.49);
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.font = "14px 'Trebuchet MS', Arial";
+      ctx.fillText("tap to skip", W / 2, H * 0.29);
+    }
+  }
+  function drawJudgeMonkey(x, y, s, variant, react) {
+    ctx.save(); ctx.translate(x, y);
+    const t = performance.now() / 1000;
+    ctx.translate(0, Math.sin(t * 3 + variant) * s * 0.08);
+    const cols = ["#8a5a2b", "#b5793a", "#5a4632"];
+    const brown = cols[variant] || "#8a5a2b";
+    ctx.fillStyle = brown;
+    ctx.beginPath(); ctx.arc(-s * 0.82, -s * 0.1, s * 0.28, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.82, -s * 0.1, s * 0.28, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.82, 0, 7); ctx.fill();
+    ctx.fillStyle = "#e9c39a";
+    ctx.beginPath(); ctx.ellipse(0, s * 0.12, s * 0.55, s * 0.6, 0, 0, 7); ctx.fill();
+    // eyes
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(-s * 0.24, -s * 0.08, s * 0.17, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.24, -s * 0.08, s * 0.17, 0, 7); ctx.fill();
+    ctx.fillStyle = "#20140c";
+    const p = react ? Math.sin(t * 8) * s * 0.05 : 0;
+    ctx.beginPath(); ctx.arc(-s * 0.24 + p, -s * 0.08, s * 0.08, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.24 + p, -s * 0.08, s * 0.08, 0, 7); ctx.fill();
+    // mouth
+    ctx.strokeStyle = "#20140c"; ctx.lineWidth = s * 0.06; ctx.lineCap = "round";
+    ctx.beginPath();
+    if (react) ctx.arc(0, s * 0.2, s * 0.2, 0.1 * Math.PI, 0.9 * Math.PI);
+    else ctx.arc(0, s * 0.34, s * 0.16, 1.2 * Math.PI, 1.8 * Math.PI);
+    ctx.stroke();
+    // accessory
+    if (variant === 0) { // cool shades
+      ctx.fillStyle = "#111";
+      roundRectPath(-s * 0.44, -s * 0.2, s * 0.34, s * 0.22, 4); ctx.fill();
+      roundRectPath(s * 0.1, -s * 0.2, s * 0.34, s * 0.22, 4); ctx.fill();
+      ctx.fillRect(-s * 0.1, -s * 0.12, s * 0.2, s * 0.05);
+    } else if (variant === 1) { // bowtie
+      ctx.fillStyle = "#ff5ea8";
+      ctx.beginPath(); ctx.moveTo(0, s * 0.78); ctx.lineTo(-s * 0.24, s * 0.64); ctx.lineTo(-s * 0.24, s * 0.92); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0, s * 0.78); ctx.lineTo(s * 0.24, s * 0.64); ctx.lineTo(s * 0.24, s * 0.92); ctx.closePath(); ctx.fill();
+    } else { // crown
+      ctx.fillStyle = "#ffd83a";
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.42, -s * 0.72); ctx.lineTo(-s * 0.42, -s * 1.02); ctx.lineTo(-s * 0.16, -s * 0.82);
+      ctx.lineTo(0, -s * 1.08); ctx.lineTo(s * 0.16, -s * 0.82); ctx.lineTo(s * 0.42, -s * 1.02); ctx.lineTo(s * 0.42, -s * 0.72);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
   }
 
   // ---------- Helpers ----------
