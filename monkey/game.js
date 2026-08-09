@@ -113,6 +113,44 @@
     o.start(t); o.stop(t + 0.2);
   }
 
+  // ---------- Monkey voice (synthesized "ooh-ooh-aah-aah") ----------
+  function monkeyHoot(t, base) {
+    if (!actx || !store.sound) return;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(base, t);
+    o.frequency.linearRampToValueAtTime(base * 1.7, t + 0.07);
+    o.frequency.linearRampToValueAtTime(base * 1.15, t + 0.2);
+    o.connect(g); g.connect(actx.destination);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.13, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+    o.start(t); o.stop(t + 0.3);
+  }
+  function monkeyScreech(t) {
+    if (!actx || !store.sound) return;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(520, t);
+    o.frequency.exponentialRampToValueAtTime(900, t + 0.09);
+    o.frequency.exponentialRampToValueAtTime(430, t + 0.22);
+    o.connect(g); g.connect(actx.destination);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.085, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+    o.start(t); o.stop(t + 0.28);
+  }
+  function monkeyChatter(t) { monkeyHoot(t, 300); monkeyHoot(t + 0.15, 340); monkeyScreech(t + 0.33); monkeyScreech(t + 0.47); }
+  function monkeyDown(t) {
+    if (!actx || !store.sound) return;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(300, t); o.frequency.exponentialRampToValueAtTime(90, t + 0.35);
+    o.connect(g); g.connect(actx.destination);
+    g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    o.start(t); o.stop(t + 0.42);
+  }
+
   // ---------- Music (an original groove) ----------
   const BPM = 112;
   const stepDur = (60 / BPM) / 2;   // 8th-note grid
@@ -159,6 +197,7 @@
     el.startScreen.classList.add("hidden");
     el.overScreen.classList.add("hidden");
     lastTime = performance.now();
+    if (store.sound && actx) monkeyChatter(actx.currentTime + 0.05);  // hype intro call
   }
 
   function showOver() {
@@ -172,7 +211,11 @@
     el.goBest.textContent = store.best;
     el.newBest.classList.toggle("hidden", !isBest);
     el.overScreen.classList.remove("hidden");
-    if (store.sound && actx) { const t = actx.currentTime; tone(523, t, 0.14, "triangle", 0.06); tone(659, t + 0.12, 0.14, "triangle", 0.06); tone(784, t + 0.26, 0.34, "triangle", 0.06); }
+    if (store.sound && actx) {
+      const t = actx.currentTime;
+      tone(523, t, 0.14, "triangle", 0.06); tone(659, t + 0.12, 0.14, "triangle", 0.06); tone(784, t + 0.26, 0.34, "triangle", 0.06);
+      if (ratingStars >= 4) monkeyChatter(t + 0.1);   // the crowd of monkeys goes wild
+    }
   }
 
   // ---------- Chart generation ----------
@@ -219,14 +262,18 @@
     poseTimer = POSE; poseLane = lane;
     addPopup(perfect ? "PERFECT" : "GOOD", perfect ? "#ffd83a" : "#8fffa0", mult);
     burst(laneX(lane), receptorY, LANE_COL[lane], perfect ? 16 : 9);
-    if (store.sound && actx) tone(perfect ? 900 : 660, actx.currentTime, 0.08, "triangle", 0.05);
+    if (store.sound && actx) {
+      const at = actx.currentTime;
+      if (perfect) monkeyHoot(at, 340); else tone(660, at, 0.07, "triangle", 0.045);
+      if (combo > 0 && combo % 10 === 0) monkeyChatter(at + 0.02); // celebratory monkey chatter every 10
+    }
   }
   function onMiss(n) {
     combo = 0;
     energy -= 12;
     stumbleTimer = STUMBLE;
     addPopup("MISS", "#ff6a6a", 0);
-    if (store.sound && actx) tone(120, actx.currentTime, 0.16, "sawtooth", 0.05);
+    if (store.sound && actx) monkeyDown(actx.currentTime);   // sad "aww" tumble
     if (energy <= 0) { energy = 0; enterJudging(); }
   }
 
@@ -447,20 +494,33 @@
     const hop = Math.abs(Math.sin(beatF * Math.PI));   // spring/bounce on every beat
     const legA = Math.sin(beatF * Math.PI * 2);        // per-beat leg step alternation
     const wob = Math.sin(beatF * Math.PI * 2);         // fast wobble for arm waves
-    const move = ((beatF / 4) | 0) % 4;                // switch dance move every bar
+    const move = ((beatF / 4) | 0) % 6;                // cycles hip-hop / b-boy moves each bar
+    const bar = beatF % 4;                             // position within the current move
+    const laf = (move === 2) ? Math.sin(beatF * Math.PI * 4) : legA; // running-man double-time legs
     const stumbling = stumbleTimer > 0;
 
     const brown = "#8a5a2b", brownD = "#6d4420", face = "#e9c39a";
+    // ground shadow (shrinks as the monkey hops)
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath(); ctx.ellipse(cx, base + s * 1.22, s * 0.55 * (1 - hop * 0.3), s * 0.14 * (1 - hop * 0.3), 0, 0, 7); ctx.fill();
+    ctx.restore();
+
     ctx.save();
     // whole-body groove: sway sideways, hop up, lean into the beat
     ctx.translate(cx + sway * s * 0.18, base - hop * s * 0.16);
-    if (stumbling) ctx.rotate(Math.sin(performance.now() / 35) * 0.16 * (stumbleTimer / STUMBLE));
-    else ctx.rotate(sway * 0.12);
+    let bodyRot = sway * 0.12;
+    if (stumbling) bodyRot = Math.sin(performance.now() / 35) * 0.16 * (stumbleTimer / STUMBLE);
+    else if (move === 4) bodyRot += (bar / 4) * Math.PI * 2;   // b-boy spin: one full turn per bar
+    else if (move === 2) bodyRot += 0.14;                       // running-man forward lean
+    ctx.rotate(bodyRot);
+    if (move === 4) ctx.scale(0.55 + 0.45 * Math.abs(Math.cos((bar / 4) * Math.PI * 2)), 1); // fake spin
     ctx.lineCap = "round"; ctx.lineJoin = "round";
 
     // ----- stepping legs -----
-    const liftL = Math.max(0, legA) * s * 0.30;
-    const liftR = Math.max(0, -legA) * s * 0.30;
+    const legMul = move === 2 ? 0.42 : 0.30;                    // running man kicks higher
+    const liftL = Math.max(0, laf) * s * legMul;
+    const liftR = Math.max(0, -laf) * s * legMul;
     ctx.strokeStyle = brown; ctx.lineWidth = s * 0.2;
     ctx.beginPath(); ctx.moveTo(-s * 0.24, s * 0.62); ctx.lineTo(-s * 0.32 - sway * s * 0.06, s * 1.08 - liftL); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(s * 0.24, s * 0.62); ctx.lineTo(s * 0.32 - sway * s * 0.06, s * 1.08 - liftR); ctx.stroke();
@@ -481,15 +541,23 @@
     ctx.beginPath(); ctx.ellipse(0, s * 0.6, s * 0.34, s * 0.4, 0, 0, 7); ctx.fill();
 
     // ----- dancing arms (with per-move variety + hit poses) -----
-    let hlx = -s * 0.7, hly = s * 0.5 + legA * s * 0.22;   // default: arms swing opposite legs
-    let hrx = s * 0.7, hry = s * 0.5 - legA * s * 0.22;
-    if (move === 1) {                                        // "raise the roof" — both arms up, waving
+    let hlx = -s * 0.7, hly = s * 0.5 + laf * s * 0.22;   // default two-step: arms swing opposite legs
+    let hrx = s * 0.7, hry = s * 0.5 - laf * s * 0.22;
+    if (move === 1) {                                      // raise the roof
       hlx = -s * 0.42; hly = -s * 0.5 - Math.max(0, wob) * s * 0.16;
       hrx = s * 0.42; hry = -s * 0.5 - Math.max(0, -wob) * s * 0.16;
-    } else if (move === 3) {                                 // clap toward the center
+    } else if (move === 2) {                               // running man: bent arms pump opposite the legs
+      hlx = -s * 0.36; hly = s * 0.2 - laf * s * 0.34;
+      hrx = s * 0.36; hry = s * 0.2 + laf * s * 0.34;
+    } else if (move === 3) {                               // arm wave: arms out, hands ripple up & down
+      hlx = -s * 0.98; hly = s * 0.34 + Math.sin(beatF * Math.PI * 2) * s * 0.22;
+      hrx = s * 0.98; hry = s * 0.34 + Math.sin(beatF * Math.PI * 2 + 1.2) * s * 0.22;
+    } else if (move === 4) {                               // b-boy: arms tucked in for the spin
+      hlx = -s * 0.28; hly = s * 0.28; hrx = s * 0.28; hry = s * 0.28;
+    } else if (move === 5) {                               // jump-clap toward the center
       const c = (wob + 1) / 2;
-      hlx = -s * (0.72 - c * 0.5); hly = s * 0.18;
-      hrx = s * (0.72 - c * 0.5); hry = s * 0.18;
+      hlx = -s * (0.72 - c * 0.52); hly = s * 0.16;
+      hrx = s * (0.72 - c * 0.52); hry = s * 0.16;
     }
     if (poseTimer > 0) {                                     // snap an arm up toward the lane you just hit
       const r = poseTimer / POSE;
