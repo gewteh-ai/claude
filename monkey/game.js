@@ -387,15 +387,6 @@
     ctx.fillStyle = "#241505"; ctx.fillRect(-12, 0, 30, H); ctx.fillRect(W - 18, 0, 30, H);
     drawVine(22, t); drawVine(W - 22, t + 1.3);
 
-    // jungle-floor bushes bobbing to the beat
-    const beat = state === STATE.PLAY ? songTime / (60 / BPM) : t * (BPM / 60);
-    for (let i = 0; i < 11; i++) {
-      const x = (i + 0.5) * (W / 11);
-      const bob = Math.abs(Math.sin(beat * Math.PI + i)) * 6;
-      ctx.fillStyle = i % 2 ? "#0a3a1c" : "#0d461f";
-      ctx.beginPath(); ctx.arc(x, H - 14 - bob, 34, Math.PI, 0); ctx.fill();
-    }
-
     // tiki torches flanking the dance floor
     drawTorch(playLeft - 26, receptorY - 6, t);
     drawTorch(playLeft + playW + 26, receptorY - 6, t + 0.7);
@@ -488,142 +479,203 @@
     const cx = W / 2;
     const base = receptorY - Math.max(150, H * 0.2);
     const s = Math.min(W, H) * 0.15;
-    // dance clock — locked to the song while playing, gentle idle groove otherwise
     const beatF = state === STATE.PLAY ? songTime / (60 / BPM) : (performance.now() / 1000) * (BPM / 60) * 0.85;
-    const sway = Math.sin(beatF * Math.PI);            // slow side-to-side groove (2-beat)
-    const hop = Math.abs(Math.sin(beatF * Math.PI));   // spring/bounce on every beat
-    const legA = Math.sin(beatF * Math.PI * 2);        // per-beat leg step alternation
-    const wob = Math.sin(beatF * Math.PI * 2);         // fast wobble for arm waves
-    const move = ((beatF / 4) | 0) % 6;                // cycles hip-hop / b-boy moves each bar
-    const bar = beatF % 4;                             // position within the current move
-    const laf = (move === 2) ? Math.sin(beatF * Math.PI * 4) : legA; // running-man double-time legs
+    const sway = Math.sin(beatF * Math.PI);
+    const hop = Math.abs(Math.sin(beatF * Math.PI));
+    const legA = Math.sin(beatF * Math.PI * 2);
+    const wob = Math.sin(beatF * Math.PI * 2);
+    const move = ((beatF / 4) | 0) % 9;                // 9 hip-hop / b-boy moves
+    const bar = beatF % 4;
+    const laf = (move === 2) ? Math.sin(beatF * Math.PI * 4) : legA;
     const stumbling = stumbleTimer > 0;
+    const nowms = performance.now();
 
-    const brown = "#8a5a2b", brownD = "#6d4420", face = "#e9c39a";
-    // ground shadow (shrinks as the monkey hops)
+    const fur = "#7a4a24", furD = "#5a3517", face = "#f0d4ab";
+    const cap = "#ff445e", capD = "#c8324a", chain = "#ffd83a", shoe = "#f5f5f5";
+
+    // shadow on the stage
     ctx.save();
-    ctx.fillStyle = "rgba(0,0,0,0.28)";
-    ctx.beginPath(); ctx.ellipse(cx, base + s * 1.22, s * 0.55 * (1 - hop * 0.3), s * 0.14 * (1 - hop * 0.3), 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath(); ctx.ellipse(cx, base + s * 1.18, s * 0.6 * (1 - hop * 0.3), s * 0.13 * (1 - hop * 0.3), 0, 0, 7); ctx.fill();
     ctx.restore();
 
     ctx.save();
-    // whole-body groove: sway sideways, hop up, lean into the beat
     ctx.translate(cx + sway * s * 0.18, base - hop * s * 0.16);
-    let bodyRot = sway * 0.12;
-    if (stumbling) bodyRot = Math.sin(performance.now() / 35) * 0.16 * (stumbleTimer / STUMBLE);
-    else if (move === 4) bodyRot += (bar / 4) * Math.PI * 2;   // b-boy spin: one full turn per bar
-    else if (move === 2) bodyRot += 0.14;                       // running-man forward lean
+    let bodyRot = sway * 0.12, slide = 0;
+    if (stumbling) bodyRot = Math.sin(nowms / 35) * 0.16 * (stumbleTimer / STUMBLE);
+    else if (move === 4) bodyRot += (bar / 4) * Math.PI * 2;                                  // b-boy spin
+    else if (move === 2) bodyRot += 0.14;                                                     // running-man lean
+    else if (move === 7) { bodyRot -= 0.12; slide = Math.sin(beatF * Math.PI * 2) * s * 0.28; } // moonwalk lean + glide
+    else if (move === 8) bodyRot += 0.12;                                                     // dab lean
     ctx.rotate(bodyRot);
-    if (move === 4) ctx.scale(0.55 + 0.45 * Math.abs(Math.cos((bar / 4) * Math.PI * 2)), 1); // fake spin
+    if (move === 4) ctx.scale(0.55 + 0.45 * Math.abs(Math.cos((bar / 4) * Math.PI * 2)), 1);
     ctx.lineCap = "round"; ctx.lineJoin = "round";
 
-    // ----- stepping legs -----
-    const legMul = move === 2 ? 0.42 : 0.30;                    // running man kicks higher
-    const liftL = Math.max(0, laf) * s * legMul;
-    const liftR = Math.max(0, -laf) * s * legMul;
-    ctx.strokeStyle = brown; ctx.lineWidth = s * 0.2;
-    ctx.beginPath(); ctx.moveTo(-s * 0.24, s * 0.62); ctx.lineTo(-s * 0.32 - sway * s * 0.06, s * 1.08 - liftL); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(s * 0.24, s * 0.62); ctx.lineTo(s * 0.32 - sway * s * 0.06, s * 1.08 - liftR); ctx.stroke();
-    ctx.fillStyle = brownD;
-    ctx.beginPath(); ctx.ellipse(-s * 0.34 - sway * s * 0.06, s * 1.1 - liftL, s * 0.16, s * 0.1, 0, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(s * 0.3 - sway * s * 0.06, s * 1.1 - liftR, s * 0.16, s * 0.1, 0, 0, 7); ctx.fill();
+    // ----- legs + sneakers -----
+    const legMul = move === 2 ? 0.42 : 0.30;
+    let liftL = Math.max(0, laf) * s * legMul, liftR = Math.max(0, -laf) * s * legMul;
+    let flx = -s * 0.3 + slide, frx = s * 0.3 + slide, fly = s * 1.08 - liftL, fry = s * 1.08 - liftR;
+    if (move === 7) { fly = s * 1.1; fry = s * 1.1; }                       // moonwalk glide flat
+    if (move === 4) { flx = -s * 0.2; frx = s * 0.2; fly = s * 0.92; fry = s * 0.92; } // tuck for spin
+    ctx.strokeStyle = fur; ctx.lineWidth = s * 0.2;
+    ctx.beginPath(); ctx.moveTo(-s * 0.22, s * 0.62); ctx.lineTo(flx, fly - s * 0.06); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.22, s * 0.62); ctx.lineTo(frx, fry - s * 0.06); ctx.stroke();
+    for (const f of [[flx, fly], [frx, fry]]) {
+      ctx.fillStyle = shoe; ctx.beginPath(); ctx.ellipse(f[0] - s * 0.03, f[1], s * 0.2, s * 0.11, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = cap; ctx.fillRect(f[0] - s * 0.22, f[1] + s * 0.05, s * 0.38, s * 0.045);
+    }
 
-    // ----- swishing tail -----
-    ctx.strokeStyle = brownD; ctx.lineWidth = s * 0.14;
-    ctx.beginPath(); ctx.moveTo(s * 0.45, s * 0.8);
-    ctx.quadraticCurveTo(s * (1.25 + wob * 0.12), s * 0.7, s * (1.08 + wob * 0.18), s * (0.05 + wob * 0.12));
+    // ----- tail -----
+    ctx.strokeStyle = furD; ctx.lineWidth = s * 0.14;
+    ctx.beginPath(); ctx.moveTo(s * 0.42, s * 0.8);
+    ctx.quadraticCurveTo(s * (1.2 + wob * 0.12), s * 0.7, s * (1.05 + wob * 0.18), s * (0.05 + wob * 0.12));
     ctx.stroke();
 
-    // ----- body -----
-    ctx.fillStyle = brown;
-    ctx.beginPath(); ctx.ellipse(0, s * 0.55, s * 0.58, s * 0.6, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = face;
-    ctx.beginPath(); ctx.ellipse(0, s * 0.6, s * 0.34, s * 0.4, 0, 0, 7); ctx.fill();
+    // ----- body + belly + gold chain -----
+    ctx.fillStyle = fur;
+    ctx.beginPath(); ctx.ellipse(0, s * 0.55, s * 0.56, s * 0.6, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#8f5a2e";
+    ctx.beginPath(); ctx.ellipse(0, s * 0.62, s * 0.34, s * 0.42, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = chain;
+    for (let i = 0; i <= 8; i++) { const tt = i / 8; const cxk = (-0.34 + 0.68 * tt) * s; const cyk = (0.16 + Math.sin(tt * Math.PI) * 0.34) * s; ctx.beginPath(); ctx.arc(cxk, cyk, s * 0.032, 0, 7); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(0, s * 0.52, s * 0.06, 0, 7); ctx.fill();
 
-    // ----- dancing arms (with per-move variety + hit poses) -----
-    let hlx = -s * 0.7, hly = s * 0.5 + laf * s * 0.22;   // default two-step: arms swing opposite legs
+    // ----- arms + hands -----
+    let hlx = -s * 0.7, hly = s * 0.5 + laf * s * 0.22;
     let hrx = s * 0.7, hry = s * 0.5 - laf * s * 0.22;
-    if (move === 1) {                                      // raise the roof
-      hlx = -s * 0.42; hly = -s * 0.5 - Math.max(0, wob) * s * 0.16;
-      hrx = s * 0.42; hry = -s * 0.5 - Math.max(0, -wob) * s * 0.16;
-    } else if (move === 2) {                               // running man: bent arms pump opposite the legs
-      hlx = -s * 0.36; hly = s * 0.2 - laf * s * 0.34;
-      hrx = s * 0.36; hry = s * 0.2 + laf * s * 0.34;
-    } else if (move === 3) {                               // arm wave: arms out, hands ripple up & down
-      hlx = -s * 0.98; hly = s * 0.34 + Math.sin(beatF * Math.PI * 2) * s * 0.22;
-      hrx = s * 0.98; hry = s * 0.34 + Math.sin(beatF * Math.PI * 2 + 1.2) * s * 0.22;
-    } else if (move === 4) {                               // b-boy: arms tucked in for the spin
-      hlx = -s * 0.28; hly = s * 0.28; hrx = s * 0.28; hry = s * 0.28;
-    } else if (move === 5) {                               // jump-clap toward the center
-      const c = (wob + 1) / 2;
-      hlx = -s * (0.72 - c * 0.52); hly = s * 0.16;
-      hrx = s * (0.72 - c * 0.52); hry = s * 0.16;
-    }
-    if (poseTimer > 0) {                                     // snap an arm up toward the lane you just hit
-      const r = poseTimer / POSE;
-      if (poseLane <= 1) { hlx = -s * (0.34 + 0.14 * (1 - r)); hly = s * 0.5 - s * (0.2 + 1.0 * r); }
-      else { hrx = s * (0.34 + 0.14 * (1 - r)); hry = s * 0.5 - s * (0.2 + 1.0 * r); }
-    }
-    ctx.strokeStyle = brown; ctx.lineWidth = s * 0.19;
-    ctx.beginPath(); ctx.moveTo(-s * 0.45, s * 0.4); ctx.quadraticCurveTo(-s * 0.62, (s * 0.4 + hly) / 2, hlx, hly); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(s * 0.45, s * 0.4); ctx.quadraticCurveTo(s * 0.62, (s * 0.4 + hry) / 2, hrx, hry); ctx.stroke();
+    if (move === 1) { hlx = -s * 0.42; hly = -s * 0.5 - Math.max(0, wob) * s * 0.16; hrx = s * 0.42; hry = -s * 0.5 - Math.max(0, -wob) * s * 0.16; }
+    else if (move === 2) { hlx = -s * 0.36; hly = s * 0.2 - laf * s * 0.34; hrx = s * 0.36; hry = s * 0.2 + laf * s * 0.34; }
+    else if (move === 3) { hlx = -s * 0.98; hly = s * 0.34 + Math.sin(beatF * Math.PI * 2) * s * 0.22; hrx = s * 0.98; hry = s * 0.34 + Math.sin(beatF * Math.PI * 2 + 1.2) * s * 0.22; }
+    else if (move === 4) { hlx = -s * 0.28; hly = s * 0.28; hrx = s * 0.28; hry = s * 0.28; }
+    else if (move === 5) { const c = (wob + 1) / 2; hlx = -s * (0.72 - c * 0.52); hly = s * 0.16; hrx = s * (0.72 - c * 0.52); hry = s * 0.16; }
+    else if (move === 6) { const p = Math.sin(beatF * Math.PI * 2); hlx = -s * 0.34 + p * s * 0.5; hly = s * 0.34; hrx = s * 0.34 + p * s * 0.5; hry = s * 0.06; } // floss
+    else if (move === 7) { hlx = -s * 0.6; hly = s * 0.5; hrx = s * 0.52; hry = s * 0.04; }   // moonwalk chill point
+    else if (move === 8) { hrx = s * 0.9; hry = -s * 0.58; hlx = -s * 0.05; hly = -s * 0.3; } // dab
+    if (poseTimer > 0) { const r = poseTimer / POSE; if (poseLane <= 1) { hlx = -s * (0.34 + 0.14 * (1 - r)); hly = s * 0.5 - s * (0.2 + 1.0 * r); } else { hrx = s * (0.34 + 0.14 * (1 - r)); hry = s * 0.5 - s * (0.2 + 1.0 * r); } }
+    ctx.strokeStyle = fur; ctx.lineWidth = s * 0.19;
+    ctx.beginPath(); ctx.moveTo(-s * 0.42, s * 0.4); ctx.quadraticCurveTo(-s * 0.6, (s * 0.4 + hly) / 2, hlx, hly); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.42, s * 0.4); ctx.quadraticCurveTo(s * 0.6, (s * 0.4 + hry) / 2, hrx, hry); ctx.stroke();
     ctx.fillStyle = face;
     ctx.beginPath(); ctx.arc(hlx, hly, s * 0.11, 0, 7); ctx.fill();
     ctx.beginPath(); ctx.arc(hrx, hry, s * 0.11, 0, 7); ctx.fill();
 
-    // ----- head (bob + tilt to the groove) -----
+    // ----- head -----
     ctx.save();
     ctx.translate(0, -hop * s * 0.05);
-    ctx.rotate(sway * 0.16);
-    ctx.fillStyle = brown;
-    ctx.beginPath(); ctx.arc(0, -s * 0.35, s * 0.55, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(-s * 0.55, -s * 0.4, s * 0.22, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.55, -s * 0.4, s * 0.22, 0, 7); ctx.fill();
+    let headRot = sway * 0.16;
+    if (move === 8) headRot += 0.5;   // tuck head into the dab
+    ctx.rotate(headRot);
+    // ears
+    ctx.fillStyle = fur;
+    ctx.beginPath(); ctx.arc(-s * 0.55, -s * 0.36, s * 0.2, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.55, -s * 0.36, s * 0.2, 0, 7); ctx.fill();
     ctx.fillStyle = face;
-    ctx.beginPath(); ctx.arc(-s * 0.55, -s * 0.4, s * 0.12, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.55, -s * 0.4, s * 0.12, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(0, -s * 0.28, s * 0.4, s * 0.42, 0, 0, 7); ctx.fill();
-    const happy = !stumbling;
-    const nowms = performance.now();
-    // rosy cheeks
-    ctx.fillStyle = "rgba(255,120,120,0.35)";
-    ctx.beginPath(); ctx.arc(-s * 0.3, -s * 0.16, s * 0.09, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.3, -s * 0.16, s * 0.09, 0, 7); ctx.fill();
-    // big googly eyes (whites bulge out) with wiggling pupils
+    ctx.beginPath(); ctx.arc(-s * 0.55, -s * 0.36, s * 0.11, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.55, -s * 0.36, s * 0.11, 0, 7); ctx.fill();
+    // head
+    ctx.fillStyle = fur;
+    ctx.beginPath(); ctx.arc(0, -s * 0.35, s * 0.55, 0, 7); ctx.fill();
+    // face patch
+    ctx.fillStyle = face;
+    ctx.beginPath(); ctx.ellipse(0, -s * 0.26, s * 0.4, s * 0.42, 0, 0, 7); ctx.fill();
+    // cheeks
+    ctx.fillStyle = "rgba(255,120,120,0.32)";
+    ctx.beginPath(); ctx.arc(-s * 0.3, -s * 0.13, s * 0.09, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.3, -s * 0.13, s * 0.09, 0, 7); ctx.fill();
+    // googly eyes
     const px = sway * s * 0.05 + Math.sin(nowms / 90) * s * 0.025;
-    const py = -s * 0.42 + Math.sin(nowms / 120) * s * 0.02;
+    const py = -s * 0.4 + Math.sin(nowms / 120) * s * 0.02;
+    const happy = !stumbling;
     ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(-s * 0.19, -s * 0.44, s * 0.17, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.19, -s * 0.44, s * 0.17, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(-s * 0.18, -s * 0.42, s * 0.16, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.18, -s * 0.42, s * 0.16, 0, 7); ctx.fill();
     ctx.fillStyle = "#20140c";
-    ctx.beginPath(); ctx.arc(-s * 0.19 + px, py, s * 0.075, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.19 + px, py, s * 0.075, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(-s * 0.18 + px, py, s * 0.07, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.18 + px, py, s * 0.07, 0, 7); ctx.fill();
     ctx.fillStyle = "#fff";
-    ctx.beginPath(); ctx.arc(-s * 0.21 + px, py - s * 0.03, s * 0.022, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.17 + px, py - s * 0.03, s * 0.022, 0, 7); ctx.fill();
-    // silly waggling eyebrows (raise with the hop)
+    ctx.beginPath(); ctx.arc(-s * 0.2 + px, py - s * 0.03, s * 0.02, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.16 + px, py - s * 0.03, s * 0.02, 0, 7); ctx.fill();
+    // eyebrows
     ctx.strokeStyle = "#3a2410"; ctx.lineWidth = s * 0.045; ctx.lineCap = "round";
-    const brow = -s * 0.64 - hop * s * 0.06;
-    ctx.beginPath(); ctx.moveTo(-s * 0.32, brow + s * 0.03); ctx.lineTo(-s * 0.05, brow); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(s * 0.32, brow + s * 0.03); ctx.lineTo(s * 0.05, brow); ctx.stroke();
+    const brow = -s * 0.6 - hop * s * 0.05;
+    ctx.beginPath(); ctx.moveTo(-s * 0.3, brow + s * 0.03); ctx.lineTo(-s * 0.04, brow); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s * 0.3, brow + s * 0.03); ctx.lineTo(s * 0.04, brow); ctx.stroke();
     // nostrils
     ctx.fillStyle = "#20140c";
-    ctx.beginPath(); ctx.arc(-s * 0.06, -s * 0.2, s * 0.032, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.06, -s * 0.2, s * 0.032, 0, 7); ctx.fill();
-    // big goofy grin (opens with the bounce) + teeth + tongue on the wild move
+    ctx.beginPath(); ctx.arc(-s * 0.06, -s * 0.18, s * 0.03, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(s * 0.06, -s * 0.18, s * 0.03, 0, 7); ctx.fill();
+    // grin
     if (happy) {
       ctx.fillStyle = "#3a1810";
-      ctx.beginPath(); ctx.ellipse(0, -s * 0.04, s * 0.21, s * 0.12 + hop * s * 0.05, 0, 0, Math.PI); ctx.fill();
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(-s * 0.17, -s * 0.06, s * 0.34, s * 0.05);
-      if (move === 1) { ctx.fillStyle = "#ff6a8a"; ctx.beginPath(); ctx.arc(0, s * 0.02 + hop * s * 0.04, s * 0.08, 0, Math.PI); ctx.fill(); }
-    } else {
-      ctx.fillStyle = "#3a1810"; ctx.beginPath(); ctx.arc(0, -s * 0.01, s * 0.09, 0, 7); ctx.fill();
-    }
+      ctx.beginPath(); ctx.ellipse(0, -s * 0.02, s * 0.2, s * 0.11 + hop * s * 0.05, 0, 0, Math.PI); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.fillRect(-s * 0.16, -s * 0.04, s * 0.32, s * 0.05);
+      if (move === 1 || move === 8) { ctx.fillStyle = "#ff6a8a"; ctx.beginPath(); ctx.arc(0, s * 0.04 + hop * s * 0.04, s * 0.07, 0, Math.PI); ctx.fill(); }
+    } else { ctx.fillStyle = "#3a1810"; ctx.beginPath(); ctx.arc(0, 0, s * 0.09, 0, 7); ctx.fill(); }
+    // backwards snapback cap
+    ctx.fillStyle = cap;
+    ctx.beginPath(); ctx.arc(0, -s * 0.66, s * 0.46, Math.PI, 2 * Math.PI); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = capD; ctx.fillRect(-s * 0.46, -s * 0.68, s * 0.92, s * 0.06);
+    ctx.fillStyle = cap; ctx.beginPath(); ctx.ellipse(s * 0.52, -s * 0.63, s * 0.18, s * 0.08, 0, 0, 7); ctx.fill(); // brim (backwards)
+    ctx.fillStyle = capD; ctx.beginPath(); ctx.arc(-s * 0.42, -s * 0.63, s * 0.045, 0, 7); ctx.fill();             // strap button
     if (stumbling) { ctx.fillStyle = "#8fd0ff"; ctx.beginPath(); ctx.arc(s * 0.5, -s * 0.55, s * 0.08, 0, 7); ctx.fill(); }
     ctx.restore();
 
     ctx.restore();
+  }
+
+  // ---------- Stage + spotlights ----------
+  function drawStage() {
+    const base = receptorY - Math.max(150, H * 0.2);
+    const s = Math.min(W, H) * 0.15;
+    const beat = state === STATE.PLAY ? songTime / (60 / BPM) : performance.now() / 1000 * (BPM / 60);
+    const cx = W / 2, topY = base + s * 1.15;
+    // spotlights beaming onto the stage (pulse with the beat)
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    const cols = ["#ff5ea8", "#38e0ff", "#ffd83a"];
+    for (let i = 0; i < 3; i++) {
+      const sx = cx + (i - 1) * W * 0.24;
+      const tx = cx + (i - 1) * s * 1.1;
+      const pulse = 0.08 + Math.max(0, Math.sin(beat * Math.PI + i)) * 0.10;
+      const g = ctx.createLinearGradient(sx, 0, tx, topY);
+      g.addColorStop(0, hexA(cols[i], pulse)); g.addColorStop(1, hexA(cols[i], 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(sx - 16, 0); ctx.lineTo(sx + 16, 0); ctx.lineTo(tx + s * 0.6, topY); ctx.lineTo(tx - s * 0.6, topY); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    // stage platform (wooden jungle stage)
+    const pw = Math.min(W * 0.72, s * 4.6);
+    ctx.fillStyle = "#3a2412";
+    roundRectPath(cx - pw / 2, topY, pw, s * 0.55, 10); ctx.fill();
+    ctx.fillStyle = "#5a3a1c";
+    ctx.beginPath(); ctx.ellipse(cx, topY, pw / 2, s * 0.26, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.2)"; ctx.lineWidth = 2;
+    for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(cx + i * pw * 0.16, topY - s * 0.18); ctx.lineTo(cx + i * pw * 0.18, topY + s * 0.5); ctx.stroke(); }
+    // glowing front edge, pulsing
+    ctx.fillStyle = hexA("#ffd83a", 0.45 + Math.max(0, Math.sin(beat * Math.PI)) * 0.3);
+    roundRectPath(cx - pw / 2, topY + s * 0.5, pw, s * 0.05, 3); ctx.fill();
+  }
+
+  // ---------- Cheering audience (foreground) ----------
+  function drawAudience() {
+    const beat = state === STATE.PLAY ? songTime / (60 / BPM) : performance.now() / 1000 * (BPM / 60);
+    const n = Math.max(8, Math.floor(W / 46));
+    const baseY = H - 4;
+    for (let i = 0; i < n; i++) {
+      const x = (i + 0.5) * (W / n);
+      const cheer = Math.sin(beat * Math.PI + i * 1.7);
+      const bob = Math.max(0, cheer) * 8;
+      const r = 15 + (i % 3) * 3;
+      ctx.fillStyle = i % 2 ? "#0b3319" : "#0e3c20";
+      ctx.beginPath(); ctx.arc(x, baseY + 16 - bob, r * 1.35, Math.PI, 0); ctx.fill();      // shoulders
+      ctx.beginPath(); ctx.arc(x, baseY - r - bob, r, 0, 7); ctx.fill();                     // head
+      ctx.beginPath(); ctx.arc(x - r * 0.9, baseY - r - bob, r * 0.42, 0, 7); ctx.fill();     // ears
+      ctx.beginPath(); ctx.arc(x + r * 0.9, baseY - r - bob, r * 0.42, 0, 7); ctx.fill();
+      if (cheer > 0.35) {                                                                     // arms up cheering
+        ctx.strokeStyle = i % 2 ? "#0b3319" : "#0e3c20"; ctx.lineWidth = r * 0.35; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(x - r * 0.7, baseY - r - bob); ctx.lineTo(x - r * 1.25, baseY - r * 2.3 - bob); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x + r * 0.7, baseY - r - bob); ctx.lineTo(x + r * 1.25, baseY - r * 2.3 - bob); ctx.stroke();
+      }
+    }
   }
 
   function drawHUD() {
@@ -674,10 +726,12 @@
   function draw() {
     ctx.clearRect(0, 0, W, H);
     drawBackground();
+    drawStage();
     drawLanes();
     drawMonkey();
     drawNotes();
     drawSparks();
+    drawAudience();
     if (state === STATE.PLAY) drawHUD();
     if (state === STATE.JUDGING) drawJudges();
   }
